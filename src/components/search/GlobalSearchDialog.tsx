@@ -19,6 +19,7 @@ import {
   CommandSeparator,
 } from '@/components/ui/command';
 import { Badge } from '@/components/ui/badge';
+import { StudentAvatar } from '@/components/students/StudentAvatar';
 import {
   School,
   Users,
@@ -31,6 +32,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import type { StickyNoteColor, TodoPriority } from '@/types';
+import { formatStudentFullName } from '@/lib/utils';
 
 interface GlobalSearchDialogProps {
   open: boolean;
@@ -140,23 +142,22 @@ export function GlobalSearchDialog({
         {students.length > 0 && (
           <CommandGroup heading="Students" className="capitalize">
             {students.map((student) => {
-              const fullName = `${student.firstName} ${student.lastName}`;
+              const fullName = formatStudentFullName(student);
               return (
                 <CommandItem
                   key={student.id}
-                  value={`student ${fullName} ${student.studentId || ''} ${student.gradeLevel || ''}`}
+                  value={`student ${fullName} ${student.middleName || ''} ${student.studentId || ''} ${student.gradeLevel || ''} ${student.email || ''} ${student.phone || ''} ${student.parentGuardian || ''} ${student.status || ''}`}
                   onSelect={() => handleSelect(() => navigate('/students'))}
                   className="flex items-center justify-between gap-3 p-2 rounded-lg cursor-pointer hover:bg-accent transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                      <Users className="h-4 w-4" />
-                    </div>
+                    <StudentAvatar student={student} size="sm" showStatusIndicator />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold truncate text-foreground leading-tight">{fullName}</p>
                       <p className="text-xs text-muted-foreground truncate mt-0.5">
                         {student.studentId ? `ID: ${student.studentId}` : 'Roster Student'}
                         {student.classIds?.length ? ` • ${student.classIds.length} classes` : ''}
+                        {student.status && student.status !== 'active' ? ` • ${student.status}` : ''}
                       </p>
                     </div>
                   </div>

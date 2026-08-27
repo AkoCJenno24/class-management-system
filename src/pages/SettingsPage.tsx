@@ -2,9 +2,11 @@
  * Settings Page — Manage Teacher Profile, Preset Grade Levels, and System Preferences.
  * Allows teachers to customize their preset Grade Levels list used when enrolling students.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { updateTeacherProfile } from '@/lib/firebase/firestore';
+import { uploadAvatar } from '@/lib/firebase/storage';
+import { resizeImage } from '@/lib/image-utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,8 +25,10 @@ import {
   Save,
   Loader2,
   GraduationCap,
+  Camera,
+  Trash2,
 } from 'lucide-react';
-import { DEFAULT_GRADE_LEVELS, AVATAR_PRESETS } from '@/types';
+import { DEFAULT_GRADE_LEVELS, AVATAR_PRESETS, AVATAR_COLORS } from '@/types';
 import { getInitials } from '@/lib/utils';
 
 export function SettingsPage() {
@@ -37,6 +41,9 @@ export function SettingsPage() {
   const [subject, setSubject] = useState('');
   const [avatarColor, setAvatarColor] = useState('#6366F1');
   const [avatarPreset, setAvatarPreset] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Grade Levels state
   const [gradeLevels, setGradeLevels] = useState<string[]>(DEFAULT_GRADE_LEVELS);
@@ -44,6 +51,8 @@ export function SettingsPage() {
 
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingGrades, setIsSavingGrades] = useState(false);
+  const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
+  const [profileTouched, setProfileTouched] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (teacherProfile) {
@@ -53,6 +62,7 @@ export function SettingsPage() {
       setSubject(teacherProfile.subject || '');
       setAvatarColor(teacherProfile.avatarColor || '#6366F1');
       setAvatarPreset(teacherProfile.avatarPreset || null);
+      setAvatarUrl(teacherProfile.avatarUrl || null);
       if (Array.isArray(teacherProfile.gradeLevels) && teacherProfile.gradeLevels.length > 0) {
         setGradeLevels(teacherProfile.gradeLevels);
       } else {
@@ -60,6 +70,67 @@ export function SettingsPage() {
       }
     }
   }, [teacherProfile]);
+
+  // Handle uploading custom photo avatar
+  const handleAvatarFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file (PNG, JPG, JPEG, WebP, GIF).');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image size exceeds 10MB limit. Please choose a smaller photo.');
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      const processed = await resizeImage(file, 400, 400, 0.85);
+      setAvatarUrl(processed.dataUrl);
+      setAvatarPreset(null);
+
+      if (user) {
+        let finalUrl = processed.dataUrl;
+        try {
+          finalUrl = await uploadAvatar(user.uid, processed.file);
+        } catch (storageErr) {
+          console.warn('Storage upload fallback to dataUrl:', storageErr);
+        }
+        setAvatarUrl(finalUrl);
+        await updateTeacherProfile(user.uid, {
+          avatarUrl: finalUrl,
+          avatarPreset: null,
+        });
+        toast.success('Avatar photo uploaded successfully!');
+      }
+    } catch (err: unknown) {
+      console.error('Error processing avatar image:', err);
+      toast.error('Failed to process image. Please try another photo.');
+    } finally {
+      setIsUploadingAvatar(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Handle removing custom avatar photo
+  const handleRemoveCustomAvatar = async () => {
+    setAvatarUrl(null);
+    if (user) {
+      try {
+        await updateTeacherProfile(user.uid, {
+          avatarUrl: null,
+        });
+        toast.success('Custom avatar photo removed.');
+      } catch {
+        toast.error('Failed to remove custom avatar.');
+      }
+    }
+  };
 
   // Handle adding a new grade level to the preset list
   const handleAddGradeLevel = async (e?: React.FormEvent) => {
@@ -166,7 +237,13 @@ export function SettingsPage() {
     e.preventDefault();
     if (!user) return;
 
-    if (!firstName.trim() || !lastName.trim()) {
+    const firstErr = firstName.trim() ? '' : 'First name is required.';
+    const lastErr = lastName.trim() ? '' : 'Last name is required.';
+
+    setProfileTouched({ firstName: true, lastName: true });
+    setProfileErrors({ firstName: firstErr, lastName: lastErr });
+
+    if (firstErr || lastErr) {
       toast.error('First name and last name are required.');
       return;
     }
@@ -179,7 +256,8 @@ export function SettingsPage() {
         school: school.trim(),
         subject: subject.trim(),
         avatarColor,
-        avatarPreset,
+        avatarPreset: avatarUrl ? null : avatarPreset,
+        avatarUrl: avatarUrl || null,
       });
       toast.success('Profile settings saved successfully!');
     } catch {
@@ -301,80 +379,229 @@ export function SettingsPage() {
         <CardContent>
           <form onSubmit={handleSaveProfile} className="space-y-6">
             {/* Avatar preview and customization */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 rounded-xl border border-border/80 bg-muted/20">
-              <Avatar className="h-16 w-16 rounded-xl border-2 border-primary/20 shadow-xs">
-                {selectedPresetObj && (
-                  <AvatarImage src={selectedPresetObj.src} alt="Avatar" />
-                )}
-                <AvatarFallback
-                  className="rounded-xl text-lg font-bold text-white"
-                  style={{ backgroundColor: avatarColor }}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-5 rounded-2xl border border-border/80 bg-gradient-to-r from-muted/30 via-muted/20 to-background shadow-xs">
+              {/* Avatar with Camera Badge */}
+              <div className="relative group shrink-0">
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="relative cursor-pointer rounded-full p-1 ring-2 ring-primary/25 hover:ring-primary/60 transition-all duration-200"
+                  title="Click to upload custom photo avatar"
                 >
-                  {getInitials(firstName, lastName)}
-                </AvatarFallback>
-              </Avatar>
+                  <Avatar className="h-20 w-20 rounded-full shadow-md overflow-hidden bg-muted">
+                    {avatarUrl ? (
+                      <AvatarImage src={avatarUrl} alt="Avatar" className="object-cover h-full w-full" />
+                    ) : selectedPresetObj ? (
+                      <AvatarImage src={selectedPresetObj.src} alt="Avatar" className="object-cover h-full w-full" />
+                    ) : null}
+                    <AvatarFallback
+                      className="rounded-full text-xl font-bold text-white"
+                      style={{ backgroundColor: avatarColor }}
+                    >
+                      {getInitials(firstName, lastName)}
+                    </AvatarFallback>
+                  </Avatar>
 
-              <div className="space-y-3 flex-1">
-                <div>
-                  <h4 className="text-sm font-semibold">Avatar Style</h4>
-                  <p className="text-xs text-muted-foreground">
-                    Select an avatar preset icon or choose a custom background color for your initials.
-                  </p>
+                  {/* Hover dark overlay with camera */}
+                  <div className="absolute inset-1 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white transition-opacity duration-200 backdrop-blur-[1px]">
+                    {isUploadingAvatar ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <>
+                        <Camera className="h-5 w-5 mb-0.5" />
+                        <span className="text-[9px] font-semibold uppercase tracking-wider">Change</span>
+                      </>
+                    )}
+                  </div>
                 </div>
 
-                {/* Preset Avatars */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setAvatarPreset(null)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border cursor-pointer transition-all ${
-                      avatarPreset === null
-                        ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
-                        : 'bg-card text-foreground hover:bg-accent border-border'
-                    }`}
-                  >
-                    Initials Avatar
-                  </button>
-                  {AVATAR_PRESETS.map((preset) => (
-                    <button
-                      key={preset.id}
+                {/* Floating Camera Badge Button */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingAvatar}
+                  className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md hover:bg-primary/90 hover:scale-110 active:scale-95 transition-all ring-2 ring-background cursor-pointer"
+                  title="Upload photo"
+                  aria-label="Upload photo avatar"
+                >
+                  {isUploadingAvatar ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Camera className="h-3.5 w-3.5" />
+                  )}
+                </button>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+                  onChange={handleAvatarFileSelect}
+                  className="hidden"
+                  aria-hidden="true"
+                />
+              </div>
+
+              <div className="space-y-3 flex-1 min-w-0">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-sm font-semibold">Avatar & Photo</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Upload your own photo or pick a character or color preset.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
                       type="button"
-                      onClick={() => setAvatarPreset(preset.id)}
-                      className={`relative p-1 rounded-lg border transition-all cursor-pointer ${
-                        avatarPreset === preset.id
-                          ? 'border-primary ring-2 ring-primary/40 bg-accent scale-105 shadow-xs'
-                          : 'border-border bg-card hover:bg-accent'
-                      }`}
-                      title={preset.label}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploadingAvatar}
+                      className="text-xs cursor-pointer h-8"
                     >
-                      <img src={preset.src} alt={preset.label} className="h-6 w-6 rounded-md" />
+                      <Camera className="mr-1.5 h-3.5 w-3.5 text-primary" />
+                      {avatarUrl ? 'Change Photo' : 'Upload Photo'}
+                    </Button>
+
+                    {avatarUrl && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRemoveCustomAvatar}
+                        className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer h-8"
+                      >
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Preset Avatars & Initials */}
+                <div className="space-y-2 pt-2 border-t border-border/60">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-medium text-muted-foreground">Presets:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAvatarUrl(null);
+                        setAvatarPreset(null);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border cursor-pointer transition-all ${
+                        avatarPreset === null && !avatarUrl
+                          ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
+                          : 'bg-card text-foreground hover:bg-accent border-border'
+                      }`}
+                    >
+                      Initials Avatar
                     </button>
-                  ))}
+                    {AVATAR_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          setAvatarUrl(null);
+                          setAvatarPreset(preset.id);
+                        }}
+                        className={`relative p-1 rounded-lg border transition-all cursor-pointer ${
+                          avatarPreset === preset.id && !avatarUrl
+                            ? 'border-primary ring-2 ring-primary/40 bg-accent scale-105 shadow-xs'
+                            : 'border-border bg-card hover:bg-accent'
+                        }`}
+                        title={preset.label}
+                      >
+                        <img src={preset.src} alt={preset.label} className="h-6 w-6 rounded-md object-cover" />
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Color picker for initials avatar */}
+                  {!avatarUrl && avatarPreset === null && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-xs text-muted-foreground">Initials Color:</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {AVATAR_COLORS.map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => setAvatarColor(c)}
+                            className={`h-5 w-5 rounded-full cursor-pointer transition-all ${
+                              avatarColor === c ? 'ring-2 ring-primary ring-offset-1 scale-110' : 'opacity-80 hover:opacity-100'
+                            }`}
+                            style={{ backgroundColor: c }}
+                            title={c}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Names */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="settings-first-name">First Name *</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="settings-first-name" className="text-xs font-medium">
+                  First Name <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   id="settings-first-name"
                   value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
+                  onChange={(e) => {
+                    setFirstName(e.target.value);
+                    if (profileTouched.firstName) {
+                      setProfileErrors((prev) => ({
+                        ...prev,
+                        firstName: e.target.value.trim() ? '' : 'First name is required.',
+                      }));
+                    }
+                  }}
+                  onBlur={() => {
+                    setProfileTouched((prev) => ({ ...prev, firstName: true }));
+                    setProfileErrors((prev) => ({
+                      ...prev,
+                      firstName: firstName.trim() ? '' : 'First name is required.',
+                    }));
+                  }}
                   disabled={isSavingProfile}
                   required
+                  className={profileErrors.firstName ? 'border-destructive focus-visible:ring-destructive/30' : ''}
                 />
+                {profileErrors.firstName && (
+                  <p className="text-xs font-medium text-destructive">{profileErrors.firstName}</p>
+                )}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="settings-last-name">Last Name *</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="settings-last-name" className="text-xs font-medium">
+                  Last Name <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   id="settings-last-name"
                   value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
+                  onChange={(e) => {
+                    setLastName(e.target.value);
+                    if (profileTouched.lastName) {
+                      setProfileErrors((prev) => ({
+                        ...prev,
+                        lastName: e.target.value.trim() ? '' : 'Last name is required.',
+                      }));
+                    }
+                  }}
+                  onBlur={() => {
+                    setProfileTouched((prev) => ({ ...prev, lastName: true }));
+                    setProfileErrors((prev) => ({
+                      ...prev,
+                      lastName: lastName.trim() ? '' : 'Last name is required.',
+                    }));
+                  }}
                   disabled={isSavingProfile}
                   required
+                  className={profileErrors.lastName ? 'border-destructive focus-visible:ring-destructive/30' : ''}
                 />
+                {profileErrors.lastName && (
+                  <p className="text-xs font-medium text-destructive">{profileErrors.lastName}</p>
+                )}
               </div>
             </div>
 

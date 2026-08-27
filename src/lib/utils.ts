@@ -97,6 +97,36 @@ export function capitalizeFirst(str: string | undefined | null): string {
 }
 
 /**
+ * Formats a student's full name with middle name/initial and suffix.
+ * e.g., "John", "Michael", "Doe", "Jr." -> "John Michael Doe Jr."
+ */
+export function formatStudentFullName(
+  student: {
+    firstName: string;
+    middleName?: string | null;
+    lastName: string;
+    suffix?: string | null;
+  },
+  options?: { middleInitialOnly?: boolean }
+): string {
+  if (!student) return '';
+  const first = student.firstName?.trim() || '';
+  const last = student.lastName?.trim() || '';
+  const middle = student.middleName?.trim() || '';
+  const suffix = student.suffix?.trim() || '';
+
+  const parts: string[] = [];
+  if (first) parts.push(first);
+  if (middle) {
+    parts.push(options?.middleInitialOnly ? `${middle.charAt(0).toUpperCase()}.` : middle);
+  }
+  if (last) parts.push(last);
+  if (suffix) parts.push(suffix);
+
+  return parts.join(' ');
+}
+
+/**
  * Automatically capitalizes the first character of the text,
  * as well as the first letter following sentence-ending punctuation (. ! ? or newline).
  * Does not capitalize every word, preserving normal sentence casing.
@@ -109,3 +139,5 @@ export function autoCapitalizeSentences(text: string): string {
     (_, prefix, letter) => `${prefix}${letter.toUpperCase()}`
   );
 }
+
+

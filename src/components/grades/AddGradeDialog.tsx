@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { StudentAvatar } from '@/components/students/StudentAvatar';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import {
   Dialog,
@@ -26,7 +26,7 @@ import {
 import { toast } from 'sonner';
 import { Loader2, BookMarked, Sparkles, AlertCircle, Edit3, AlertTriangle } from 'lucide-react';
 import type { Student, Activity, Grade } from '@/types';
-import { getInitials } from '@/lib/utils';
+import { formatStudentFullName } from '@/lib/utils';
 
 interface AddGradeDialogProps {
   open: boolean;
@@ -136,18 +136,13 @@ export function AddGradeDialog({
           )
         : null;
 
+      const fullName = formatStudentFullName(s);
       return {
         value: s.id,
-        label: `${s.firstName} ${s.lastName}`,
-        keywords: [s.firstName, s.lastName, s.studentId || '', s.email || ''],
+        label: fullName,
+        keywords: [s.firstName, s.middleName || '', s.lastName, s.studentId || '', s.email || ''],
         subtext: s.studentId ? `ID: ${s.studentId}` : s.email || undefined,
-        icon: (
-          <Avatar className="h-6 w-6 shrink-0">
-            <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">
-              {getInitials(s.firstName, s.lastName)}
-            </AvatarFallback>
-          </Avatar>
-        ),
+        icon: <StudentAvatar student={s} size="sm" />,
         badge: studentGrade ? (
           <Badge
             variant="outline"

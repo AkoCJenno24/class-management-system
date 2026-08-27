@@ -28,7 +28,9 @@ import {
   TableRow,
   TableCell,
 } from '@/components/ui/table';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { StudentAvatar } from '@/components/students/StudentAvatar';
+import { StudentStatusBadge } from '@/components/students/StudentStatusBadge';
+import { EditStudentDialog } from '@/components/students/EditStudentDialog';
 import { AddGradeDialog } from '@/components/grades/AddGradeDialog';
 import { EditGradeDialog } from '@/components/grades/EditGradeDialog';
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
@@ -49,15 +51,21 @@ import {
   XCircle,
   Clock,
   Pencil,
+  GraduationCap,
+  Mail,
+  Phone,
+  UserCheck,
+  MapPin,
+  User,
 } from 'lucide-react';
 import type { Class, Student, Grade, AttendanceRecord, AttendanceStatus, Activity } from '@/types';
 import { DEFAULT_GRADING_SCALE } from '@/types';
 import {
-  getInitials,
   formatDate,
   calculatePercentage,
   formatGrade,
   getGradeColor,
+  formatStudentFullName,
 } from '@/lib/utils';
 
 export function StudentClassDashboardPage() {
@@ -75,6 +83,7 @@ export function StudentClassDashboardPage() {
   // Add & edit grade modals
   const [isAddGradeOpen, setIsAddGradeOpen] = useState(false);
   const [editingGrade, setEditingGrade] = useState<Grade | null>(null);
+  const [isEditStudentOpen, setIsEditStudentOpen] = useState(false);
 
   const scale = teacherProfile?.gradingScale || DEFAULT_GRADING_SCALE;
 
@@ -309,54 +318,115 @@ export function StudentClassDashboardPage() {
         </Link>
         <span>/</span>
         <span className="font-medium text-foreground">
-          {currentStudent?.firstName} {currentStudent?.lastName}
+          {currentStudent ? formatStudentFullName(currentStudent) : 'Student'}
         </span>
       </div>
 
       {/* Student Profile Hero Banner */}
-      <Card className="border-border bg-card shadow-xs">
+      <Card className="border-border bg-card shadow-xs overflow-hidden">
         <CardContent className="p-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <Button variant="outline" size="icon" className="shrink-0 h-10 w-10" asChild>
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 min-w-0">
+              <Button variant="outline" size="icon" className="shrink-0 h-10 w-10 self-start sm:self-center" asChild>
                 <Link to={`/classes/${classId}`}>
                   <ArrowLeft className="h-4 w-4" />
                   <span className="sr-only">Back</span>
                 </Link>
               </Button>
 
-              <Avatar className="h-16 w-16 shrink-0">
-                <AvatarFallback className="bg-primary/10 text-primary text-xl font-bold">
-                  {getInitials(
-                    currentStudent?.firstName || 'S',
-                    currentStudent?.lastName || 'T'
-                  )}
-                </AvatarFallback>
-              </Avatar>
+              <StudentAvatar
+                student={currentStudent}
+                size="xl"
+                showStatusIndicator
+                className="shrink-0 ring-2 ring-primary/20 shadow-md"
+              />
 
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
+              <div className="space-y-1.5 min-w-0">
+                <div className="flex flex-wrap items-center gap-2.5">
                   <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                    {currentStudent?.firstName} {currentStudent?.lastName}
+                    {currentStudent ? formatStudentFullName(currentStudent) : ''}
                   </h2>
+                  {currentStudent?.status && (
+                    <StudentStatusBadge status={currentStudent.status} />
+                  )}
                   {currentStudent?.studentId && (
                     <Badge variant="secondary" className="font-mono text-xs font-normal">
                       ID: {currentStudent.studentId}
                     </Badge>
                   )}
+                  {currentStudent?.gradeLevel && (
+                    <Badge variant="outline" className="text-xs font-normal">
+                      <GraduationCap className="h-3 w-3 mr-1 text-primary" />
+                      {currentStudent.gradeLevel}
+                    </Badge>
+                  )}
                 </div>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  {currentStudent?.email || 'No email registered'} • Enrolled in{' '}
-                  <span className="font-medium text-foreground">{currentClass.name}</span>
-                  {currentClass.subject ? ` (${currentClass.subject})` : ''}
+
+                <p className="text-xs text-muted-foreground">
+                  Enrolled in <span className="font-semibold text-foreground">{currentClass.name}</span>
+                  {currentClass.subject ? ` • ${currentClass.subject}` : ''}
                 </p>
+
+                {/* Extended Details Chips */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-1 text-xs text-muted-foreground">
+                  {currentStudent?.gender && (
+                    <span className="flex items-center gap-1">
+                      <User className="h-3 w-3 text-primary/70 shrink-0" />
+                      {currentStudent.gender}
+                    </span>
+                  )}
+                  {currentStudent?.dateOfBirth && (
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3 text-primary/70 shrink-0" />
+                      Born {formatDate(currentStudent.dateOfBirth)}
+                    </span>
+                  )}
+                  {currentStudent?.parentGuardian && (
+                    <span className="flex items-center gap-1">
+                      <UserCheck className="h-3 w-3 text-primary/70 shrink-0" />
+                      Guardian: <span className="text-foreground font-medium">{currentStudent.parentGuardian}</span>
+                    </span>
+                  )}
+                  {currentStudent?.email && (
+                    <a
+                      href={`mailto:${currentStudent.email}`}
+                      className="flex items-center gap-1 text-primary hover:underline"
+                    >
+                      <Mail className="h-3 w-3 shrink-0" />
+                      {currentStudent.email}
+                    </a>
+                  )}
+                  {currentStudent?.phone && (
+                    <a
+                      href={`tel:${currentStudent.phone}`}
+                      className="flex items-center gap-1 text-primary hover:underline"
+                    >
+                      <Phone className="h-3 w-3 shrink-0" />
+                      {currentStudent.phone}
+                    </a>
+                  )}
+                  {currentStudent?.address && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="h-3 w-3 text-primary/70 shrink-0" />
+                      {currentStudent.address}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <Button onClick={() => setIsAddGradeOpen(true)} className="shadow-xs">
+            <div className="flex items-center gap-2.5 shrink-0 self-start lg:self-center">
+              <Button
+                variant="outline"
+                onClick={() => setIsEditStudentOpen(true)}
+                className="cursor-pointer shadow-2xs"
+              >
+                <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                Edit Profile
+              </Button>
+              <Button onClick={() => setIsAddGradeOpen(true)} className="shadow-xs cursor-pointer">
                 <Plus className="mr-2 h-4 w-4" />
-                Record New Grade
+                Record Grade
               </Button>
             </div>
           </div>
@@ -739,6 +809,13 @@ export function StudentClassDashboardPage() {
           preselectedStudentId={currentStudent.id}
         />
       )}
+
+      {/* Edit Student Dialog */}
+      <EditStudentDialog
+        student={currentStudent}
+        open={isEditStudentOpen}
+        onOpenChange={setIsEditStudentOpen}
+      />
 
       {/* Edit Grade Dialog */}
       <EditGradeDialog

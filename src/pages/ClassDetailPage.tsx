@@ -32,7 +32,8 @@ import { ActivityManager } from '@/components/activities/ActivityManager';
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { showGraceUndoToast } from '@/components/ui/grace-undo-toast';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { StudentAvatar } from '@/components/students/StudentAvatar';
+import { StudentStatusBadge } from '@/components/students/StudentStatusBadge';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -47,7 +48,7 @@ import {
   BookMarked,
 } from 'lucide-react';
 import type { Class, Student, Grade, Activity } from '@/types';
-import { getInitials, calculatePercentage, formatGrade, getGradeColor } from '@/lib/utils';
+import { calculatePercentage, formatGrade, getGradeColor, formatStudentFullName } from '@/lib/utils';
 import { DEFAULT_GRADING_SCALE } from '@/types';
 
 export function ClassDetailPage() {
@@ -70,6 +71,8 @@ export function ClassDetailPage() {
   const [editName, setEditName] = useState('');
   const [editSubject, setEditSubject] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editNameError, setEditNameError] = useState('');
+  const [editNameTouched, setEditNameTouched] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   const [studentToRemove, setStudentToRemove] = useState<{ id: string; name: string } | null>(null);
@@ -149,7 +152,20 @@ export function ClassDetailPage() {
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !classId || !editName.trim()) return;
+    setEditNameTouched(true);
+    if (!editName.trim()) {
+      setEditNameError('Class name is required.');
+      toast.error('Please enter a class name.');
+      return;
+    }
+    if (editName.trim().length < 2) {
+      setEditNameError('Class name must be at least 2 characters.');
+      toast.error('Class name must be at least 2 characters.');
+      return;
+    }
+    setEditNameError('');
+
+    if (!user || !classId) return;
 
     setIsSavingSettings(true);
     try {
@@ -370,6 +386,8 @@ export function ClassDetailPage() {
                   color = getGradeColor(avgPercent, 100, scale);
                 }
 
+                const studentName = formatStudentFullName(student);
+
                 return (
                   <Link
                     key={student.id}
@@ -379,15 +397,16 @@ export function ClassDetailPage() {
                     <Card className="flex flex-col justify-between p-4 gap-3 border-border shadow-xs group-hover:border-primary/50 group-hover:shadow-md transition-all duration-200 cursor-pointer h-full">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-3 min-w-0">
-                          <Avatar className="h-10 w-10 shrink-0">
-                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                              {getInitials(student.firstName, student.lastName)}
-                            </AvatarFallback>
-                          </Avatar>
+                          <StudentAvatar student={student} size="default" showStatusIndicator />
                           <div className="min-w-0">
-                            <p className="font-semibold text-sm group-hover:text-primary transition-colors truncate">
-                              {student.firstName} {student.lastName}
-                            </p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-semibold text-sm group-hover:text-primary transition-colors truncate">
+                                {studentName}
+                              </p>
+                              {student.status && student.status !== 'active' && (
+                                <StudentStatusBadge status={student.status} showDot={false} className="text-[10px] py-0 px-1.5" />
+                              )}
+                            </div>
                             <p className="text-xs text-muted-foreground truncate">
                               {student.gradeLevel ? `${student.gradeLevel}` : ''}
                               {student.gradeLevel && student.studentId ? ' • ' : ''}
@@ -405,7 +424,7 @@ export function ClassDetailPage() {
                             e.stopPropagation();
                             setStudentToRemove({
                               id: student.id,
-                              name: `${student.firstName} ${student.lastName}`,
+                              name: studentName,
                             });
                           }}
                           title="Remove from class"
@@ -519,20 +538,37 @@ export function ClassDetailPage() {
               <CardTitle className="text-lg">Class Settings</CardTitle>
               <CardDescription>Update name, subject, or description for this class.</CardDescription>
             </CardHeader>
-            <form onSubmit={handleSaveSettings}>
+            <form onSubmit={handleSaveSettings} noValidate>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-class-name">Class Name *</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-class-name" className="text-xs font-medium">
+                    Class Name <span className="text-destructive">*</span>
+                  </Label>
                   <Input
                     id="edit-class-name"
                     value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
+                    onChange={(e) => {
+                      setEditName(e.target.value);
+                      if (editNameTouched) {
+                        setEditNameError(e.target.value.trim() ? '' : 'Class name is required.');
+                      }
+                    }}
+                    onBlur={() => {
+                      setEditNameTouched(true);
+                      setEditNameError(editName.trim() ? '' : 'Class name is required.');
+                    }}
                     disabled={isSavingSettings}
                     required
+                    className={editNameError ? 'border-destructive focus-visible:ring-destructive/30' : ''}
                   />
+                  {editNameError && (
+                    <p className="text-xs font-medium text-destructive">{editNameError}</p>
+                  )}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-class-subject">Subject</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-class-subject" className="text-xs font-medium">
+                    Subject <span className="text-[10px] text-muted-foreground">(optional)</span>
+                  </Label>
                   <Input
                     id="edit-class-subject"
                     value={editSubject}
@@ -540,8 +576,10 @@ export function ClassDetailPage() {
                     disabled={isSavingSettings}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-class-desc">Description</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-class-desc" className="text-xs font-medium">
+                    Description <span className="text-[10px] text-muted-foreground">(optional)</span>
+                  </Label>
                   <Input
                     id="edit-class-desc"
                     value={editDescription}

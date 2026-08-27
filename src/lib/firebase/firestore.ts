@@ -25,6 +25,7 @@ import type {
   TeacherProfile,
   Class,
   Student,
+  StudentStatus,
   Activity,
   ActivityType,
   Grade,
@@ -110,6 +111,7 @@ export async function completeOnboarding(uid: string, data: OnboardingData): Pro
     lastName: data.lastName ?? '',
     school: data.school ?? '',
     subject: data.subject ?? '',
+    avatarUrl: data.avatarUrl ?? null,
     avatarColor: data.avatarColor ?? '#6366F1',
     avatarPreset: data.avatarPreset ?? null,
     gradingScale: data.gradingScale ?? DEFAULT_GRADING_SCALE,
@@ -267,23 +269,44 @@ export async function getClass(uid: string, classId: string): Promise<Class | nu
 // ─── Students ────────────────────────────────────────────────────────────────
 
 /** Creates a new student in the global roster. Returns the new student ID. */
-/** Creates a new student in the global roster. Returns the new student ID. */
 export async function createStudent(
   uid: string,
   data: {
     firstName: string;
+    middleName?: string | null;
     lastName: string;
+    suffix?: string | null;
+    avatarUrl?: string | null;
+    avatarPreset?: string | null;
+    avatarColor?: string | null;
+    dateOfBirth?: string | null;
+    gender?: string | null;
+    address?: string | null;
+    status?: StudentStatus;
+    parentGuardian?: string | null;
+    email?: string | null;
+    phone?: string | null;
     studentId?: string | null;
     gradeLevel?: string | null;
-    email?: string | null;
   }
 ): Promise<string> {
   const ref = await addDoc(collection(db, 'users', uid, 'students'), {
     firstName: data.firstName,
+    middleName: data.middleName ?? null,
     lastName: data.lastName,
+    suffix: data.suffix ?? null,
+    avatarUrl: data.avatarUrl ?? null,
+    avatarPreset: data.avatarPreset ?? null,
+    avatarColor: data.avatarColor ?? '#6366F1',
+    dateOfBirth: data.dateOfBirth ?? null,
+    gender: data.gender ?? null,
+    address: data.address ?? null,
+    status: data.status ?? 'active',
+    parentGuardian: data.parentGuardian ?? null,
+    email: data.email ?? null,
+    phone: data.phone ?? null,
     studentId: data.studentId ?? null,
     gradeLevel: data.gradeLevel ?? null,
-    email: data.email ?? null,
     classIds: [],
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -341,17 +364,31 @@ export function onStudentsChange(
   return onSnapshot(
     q,
     (snap) => {
-      const students: Student[] = snap.docs.map((d) => ({
-        id: d.id,
-        firstName: d.data().firstName ?? '',
-        lastName: d.data().lastName ?? '',
-        email: d.data().email ?? null,
-        studentId: d.data().studentId ?? null,
-        gradeLevel: d.data().gradeLevel ?? null,
-        classIds: d.data().classIds ?? [],
-        createdAt: toDate(d.data().createdAt),
-        updatedAt: toDate(d.data().updatedAt),
-      }));
+      const students: Student[] = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          firstName: data.firstName ?? '',
+          middleName: data.middleName ?? null,
+          lastName: data.lastName ?? '',
+          suffix: data.suffix ?? null,
+          avatarUrl: data.avatarUrl ?? null,
+          avatarPreset: data.avatarPreset ?? null,
+          avatarColor: data.avatarColor ?? '#6366F1',
+          dateOfBirth: data.dateOfBirth ?? null,
+          gender: data.gender ?? null,
+          address: data.address ?? null,
+          status: (data.status as StudentStatus) ?? 'active',
+          parentGuardian: data.parentGuardian ?? null,
+          email: data.email ?? null,
+          phone: data.phone ?? null,
+          studentId: data.studentId ?? null,
+          gradeLevel: data.gradeLevel ?? null,
+          classIds: data.classIds ?? [],
+          createdAt: toDate(data.createdAt),
+          updatedAt: toDate(data.updatedAt),
+        };
+      });
       students.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       callback(students);
     },

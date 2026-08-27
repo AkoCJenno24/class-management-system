@@ -1,12 +1,12 @@
 /**
- * Login page.
- * Email/password sign-in and Google Sign-In with Firebase Auth.
- * Includes link to sign up and password reset functionality.
+ * Sign-in / Login page.
+ * Features auto-validation for email format and password presence.
  */
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { signIn, signInWithGoogle, getAuthErrorMessage } from '@/lib/firebase/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import { isValidEmail } from '@/lib/validation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,7 +16,7 @@ import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { toast } from 'sonner';
 import { Loader2, GraduationCap } from 'lucide-react';
 
-/** Google "G" logo as inline SVG for the sign-in button */
+/** Google "G" logo as inline SVG */
 function GoogleIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" width="18" height="18">
@@ -33,6 +33,8 @@ export function LoginPage() {
   const { user, isLoading: authLoading, isOnboarded } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
@@ -41,16 +43,48 @@ export function LoginPage() {
     return <Navigate to={isOnboarded ? '/' : '/onboarding'} replace />;
   }
 
+  const validateField = (field: string, val: string): string => {
+    if (field === 'email') {
+      if (!val.trim()) return 'Email is required.';
+      if (!isValidEmail(val.trim())) return 'Please enter a valid email address.';
+      return '';
+    }
+    if (field === 'password') {
+      if (!val) return 'Password is required.';
+      if (val.length < 6) return 'Password must be at least 6 characters.';
+      return '';
+    }
+    return '';
+  };
+
+  const handleBlur = (field: string, val: string) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    setErrors((prev) => ({ ...prev, [field]: validateField(field, val) }));
+  };
+
+  const handleChange = (field: string, val: string, setter: (v: string) => void) => {
+    setter(val);
+    if (touched[field]) {
+      setErrors((prev) => ({ ...prev, [field]: validateField(field, val) }));
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      toast.error('Please fill in all fields.');
+    const emailErr = validateField('email', email);
+    const passErr = validateField('password', password);
+
+    setTouched({ email: true, password: true });
+    setErrors({ email: emailErr, password: passErr });
+
+    if (emailErr || passErr) {
+      toast.error('Please enter valid email and password.');
       return;
     }
 
     setIsLoading(true);
     try {
-      await signIn(email, password);
+      await signIn(email.trim(), password);
       toast.success('Welcome back!');
       navigate('/');
     } catch (error: unknown) {
@@ -69,7 +103,6 @@ export function LoginPage() {
       navigate('/');
     } catch (error: unknown) {
       const code = (error as { code?: string }).code ?? '';
-      // Don't show error if user closed the popup
       if (code !== 'auth/popup-closed-by-user') {
         toast.error(getAuthErrorMessage(code));
       }
@@ -120,35 +153,51 @@ export function LoginPage() {
           </div>
 
           {/* Email/password form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="login-email">Email</Label>
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+            <div className="space-y-1.5">
+              <Label htmlFor="login-email">Email <span className="text-destructive">*</span></Label>
               <Input
                 id="login-email"
                 type="email"
                 placeholder="teacher@school.edu"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => handleChange('email', e.target.value, setEmail)}
+                onBlur={() => handleBlur('email', email)}
                 disabled={isLoading || isGoogleLoading}
                 autoComplete="email"
+                className={errors.email ? 'border-destructive focus-visible:ring-destructive/30' : ''}
               />
+              {errors.email && (
+                <p className="text-xs font-medium text-destructive">{errors.email}</p>
+              )}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="login-password">Password</Label>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="login-password">Password <span className="text-destructive">*</span></Label>
               <Input
                 id="login-password"
                 type="password"
                 placeholder="••••••••"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => handleChange('password', e.target.value, setPassword)}
+                onBlur={() => handleBlur('password', password)}
                 disabled={isLoading || isGoogleLoading}
                 autoComplete="current-password"
+                className={errors.password ? 'border-destructive focus-visible:ring-destructive/30' : ''}
               />
+              {errors.password && (
+                <p className="text-xs font-medium text-destructive">{errors.password}</p>
+              )}
             </div>
-            <Button type="submit" className="w-full" disabled={isLoading || isGoogleLoading}>
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={isLoading || isGoogleLoading || !email.trim() || !password}
+            >
               {isLoading ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   Signing in...
                 </>
               ) : (
@@ -158,10 +207,10 @@ export function LoginPage() {
           </form>
         </CardContent>
 
-        <CardFooter className="flex flex-col">
-          <p className="text-center text-sm text-muted-foreground">
+        <CardFooter className="flex justify-center border-t border-border/50 py-4">
+          <p className="text-sm text-muted-foreground">
             Don't have an account?{' '}
-            <Link to="/signup" className="font-medium text-primary hover:underline">
+            <Link to="/signup" className="font-semibold text-primary underline-offset-4 hover:underline">
               Sign up
             </Link>
           </p>

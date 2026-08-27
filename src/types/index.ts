@@ -124,12 +124,95 @@ export const DEFAULT_GRADE_LEVELS: string[] = [
   'Other',
 ];
 
+/** Supported student enrollment statuses */
+export type StudentStatus =
+  | 'active'
+  | 'inactive'
+  | 'graduated'
+  | 'transferred'
+  | 'dropped'
+  | 'suspended';
+
+/** Student status metadata configuration */
+export interface StudentStatusOption {
+  value: StudentStatus;
+  label: string;
+  badgeClass: string;
+  dotColor: string;
+}
+
+export const STUDENT_STATUS_OPTIONS: StudentStatusOption[] = [
+  {
+    value: 'active',
+    label: 'Active',
+    badgeClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+    dotColor: '#10B981',
+  },
+  {
+    value: 'inactive',
+    label: 'Inactive',
+    badgeClass: 'bg-muted text-muted-foreground border-border',
+    dotColor: '#6B7280',
+  },
+  {
+    value: 'graduated',
+    label: 'Graduated',
+    badgeClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+    dotColor: '#3B82F6',
+  },
+  {
+    value: 'transferred',
+    label: 'Transferred',
+    badgeClass: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+    dotColor: '#8B5CF6',
+  },
+  {
+    value: 'dropped',
+    label: 'Dropped',
+    badgeClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+    dotColor: '#F59E0B',
+  },
+  {
+    value: 'suspended',
+    label: 'Suspended',
+    badgeClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
+    dotColor: '#EF4444',
+  },
+];
+
+/** Preset gender options for student records */
+export const STUDENT_GENDER_OPTIONS = [
+  'Male',
+  'Female',
+  'Non-binary',
+  'Other',
+  'Prefer not to say',
+] as const;
+
+export type StudentGender = (typeof STUDENT_GENDER_OPTIONS)[number] | string;
+
 /** Student in the global roster */
 export interface Student {
   id: string;
+  // Basic Information
   firstName: string;
+  middleName?: string | null;
   lastName: string;
+  suffix?: string | null;
+  avatarUrl?: string | null;
+  avatarPreset?: string | null;
+  avatarColor?: string | null;
+  dateOfBirth?: string | null; // ISO Date YYYY-MM-DD
+  gender?: StudentGender | null;
+  address?: string | null;
+  status?: StudentStatus;
+
+  // Contact Information
+  parentGuardian?: string | null;
   email?: string | null;
+  phone?: string | null;
+
+  // Academic Information
   studentId: string | null;
   gradeLevel?: string | null;
   classIds: string[];
@@ -228,6 +311,7 @@ export interface OnboardingData {
   lastName: string;
   school: string;
   subject: string;
+  avatarUrl?: string | null;
   avatarColor: string;
   avatarPreset: string | null;
   gradingScale: GradingScale;

@@ -73,7 +73,11 @@ export function NavUser() {
             }
           >
             <Avatar className="h-8 w-8 rounded-lg">
-              {avatarPreset && <AvatarImage src={avatarPreset.src} alt={name} />}
+              {teacherProfile?.avatarUrl ? (
+                <AvatarImage src={teacherProfile.avatarUrl} alt={name} className="object-cover" />
+              ) : avatarPreset ? (
+                <AvatarImage src={avatarPreset.src} alt={name} className="object-cover" />
+              ) : null}
               <AvatarFallback
                 className="rounded-lg text-xs font-bold text-white"
                 style={{ backgroundColor: teacherProfile?.avatarColor || "#6366F1" }}
@@ -97,7 +101,11 @@ export function NavUser() {
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-center gap-3 px-2 py-2 text-left text-sm">
                   <Avatar className="h-9 w-9 rounded-lg">
-                    {avatarPreset && <AvatarImage src={avatarPreset.src} alt={name} />}
+                    {teacherProfile?.avatarUrl ? (
+                      <AvatarImage src={teacherProfile.avatarUrl} alt={name} className="object-cover" />
+                    ) : avatarPreset ? (
+                      <AvatarImage src={avatarPreset.src} alt={name} className="object-cover" />
+                    ) : null}
                     <AvatarFallback
                       className="rounded-lg text-xs font-bold text-white"
                       style={{ backgroundColor: teacherProfile?.avatarColor || "#6366F1" }}

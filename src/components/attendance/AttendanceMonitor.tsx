@@ -28,7 +28,8 @@ import {
   TableRow,
   TableCell,
 } from '@/components/ui/table';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { StudentAvatar } from '@/components/students/StudentAvatar';
+import { StudentStatusBadge } from '@/components/students/StudentStatusBadge';
 import { toast } from 'sonner';
 import {
   CheckSquare,
@@ -45,7 +46,7 @@ import {
   Search,
 } from 'lucide-react';
 import type { Student, AttendanceRecord, AttendanceStatus } from '@/types';
-import { getInitials } from '@/lib/utils';
+import { formatStudentFullName } from '@/lib/utils';
 
 interface AttendanceMonitorProps {
   classId: string;
@@ -511,18 +512,19 @@ export function AttendanceMonitor({ classId, students }: AttendanceMonitorProps)
                         {/* Student Info */}
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-                                {getInitials(student.firstName, student.lastName)}
-                              </AvatarFallback>
-                            </Avatar>
+                            <StudentAvatar student={student} size="default" showStatusIndicator />
                             <div>
-                              <span className="font-semibold text-foreground">
-                                {student.firstName} {student.lastName}
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-foreground">
+                                  {formatStudentFullName(student)}
+                                </span>
+                                {student.status && student.status !== 'active' && (
+                                  <StudentStatusBadge status={student.status} showDot={false} className="text-[10px] py-0 px-1.5" />
+                                )}
+                              </div>
                               {student.studentId && (
-                                <span className="ml-2 text-xs text-muted-foreground font-mono">
-                                  ({student.studentId})
+                                <span className="text-xs text-muted-foreground font-mono">
+                                  ID: {student.studentId}
                                 </span>
                               )}
                             </div>

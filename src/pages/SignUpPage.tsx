@@ -1,12 +1,12 @@
 /**
  * Sign-up page.
- * Email/password registration and Google Sign-In with Firebase Auth.
- * Creates both a Firebase Auth account and a Firestore teacher profile.
+ * Features strict auto-validation for email format, password length, and password confirmation.
  */
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { signUp, signInWithGoogle, getAuthErrorMessage } from '@/lib/firebase/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import { isValidEmail } from '@/lib/validation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,6 +34,8 @@ export function SignUpPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
@@ -42,27 +44,61 @@ export function SignUpPage() {
     return <Navigate to="/onboarding" replace />;
   }
 
+  const validateField = (field: string, val: string): string => {
+    if (field === 'email') {
+      if (!val.trim()) return 'Email is required.';
+      if (!isValidEmail(val.trim())) return 'Please enter a valid email address.';
+      return '';
+    }
+    if (field === 'password') {
+      if (!val) return 'Password is required.';
+      if (val.length < 6) return 'Password must be at least 6 characters.';
+      return '';
+    }
+    if (field === 'confirmPassword') {
+      if (!val) return 'Please confirm your password.';
+      if (val !== password) return 'Passwords do not match.';
+      return '';
+    }
+    return '';
+  };
+
+  const handleBlur = (field: string, val: string) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    setErrors((prev) => ({ ...prev, [field]: validateField(field, val) }));
+  };
+
+  const handleChange = (field: string, val: string, setter: (v: string) => void) => {
+    setter(val);
+    if (touched[field]) {
+      setErrors((prev) => ({ ...prev, [field]: validateField(field, val) }));
+    }
+    if (field === 'password' && touched.confirmPassword) {
+      if (confirmPassword && val !== confirmPassword) {
+        setErrors((prev) => ({ ...prev, confirmPassword: 'Passwords do not match.' }));
+      } else {
+        setErrors((prev) => ({ ...prev, confirmPassword: '' }));
+      }
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    const emailErr = validateField('email', email);
+    const passErr = validateField('password', password);
+    const confirmErr = validateField('confirmPassword', confirmPassword);
 
-    if (!email || !password || !confirmPassword) {
-      toast.error('Please fill in all fields.');
-      return;
-    }
+    setTouched({ email: true, password: true, confirmPassword: true });
+    setErrors({ email: emailErr, password: passErr, confirmPassword: confirmErr });
 
-    if (password !== confirmPassword) {
-      toast.error('Passwords do not match.');
-      return;
-    }
-
-    if (password.length < 6) {
-      toast.error('Password must be at least 6 characters.');
+    if (emailErr || passErr || confirmErr) {
+      toast.error('Please resolve validation errors before continuing.');
       return;
     }
 
     setIsLoading(true);
     try {
-      await signUp(email, password);
+      await signUp(email.trim(), password);
       toast.success('Account created! Let\'s set up your profile.');
       navigate('/onboarding');
     } catch (error: unknown) {
@@ -131,47 +167,75 @@ export function SignUpPage() {
           </div>
 
           {/* Email/password form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="signup-email">Email</Label>
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+            <div className="space-y-1.5">
+              <Label htmlFor="signup-email">Email <span className="text-destructive">*</span></Label>
               <Input
                 id="signup-email"
                 type="email"
                 placeholder="teacher@school.edu"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => handleChange('email', e.target.value, setEmail)}
+                onBlur={() => handleBlur('email', email)}
                 disabled={isLoading || isGoogleLoading}
                 autoComplete="email"
+                className={errors.email ? 'border-destructive focus-visible:ring-destructive/30' : ''}
               />
+              {errors.email && (
+                <p className="text-xs font-medium text-destructive">{errors.email}</p>
+              )}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="signup-password">Password</Label>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="signup-password">Password <span className="text-destructive">*</span></Label>
               <Input
                 id="signup-password"
                 type="password"
                 placeholder="At least 6 characters"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => handleChange('password', e.target.value, setPassword)}
+                onBlur={() => handleBlur('password', password)}
                 disabled={isLoading || isGoogleLoading}
                 autoComplete="new-password"
+                className={errors.password ? 'border-destructive focus-visible:ring-destructive/30' : ''}
               />
+              {errors.password && (
+                <p className="text-xs font-medium text-destructive">{errors.password}</p>
+              )}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="signup-confirm-password">Confirm Password</Label>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="signup-confirm-password">Confirm Password <span className="text-destructive">*</span></Label>
               <Input
                 id="signup-confirm-password"
                 type="password"
-                placeholder="Repeat your password"
+                placeholder="Re-enter your password"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={(e) => handleChange('confirmPassword', e.target.value, setConfirmPassword)}
+                onBlur={() => handleBlur('confirmPassword', confirmPassword)}
                 disabled={isLoading || isGoogleLoading}
                 autoComplete="new-password"
+                className={errors.confirmPassword ? 'border-destructive focus-visible:ring-destructive/30' : ''}
               />
+              {errors.confirmPassword && (
+                <p className="text-xs font-medium text-destructive">{errors.confirmPassword}</p>
+              )}
             </div>
-            <Button type="submit" className="w-full" disabled={isLoading || isGoogleLoading}>
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={
+                isLoading ||
+                isGoogleLoading ||
+                !email.trim() ||
+                password.length < 6 ||
+                password !== confirmPassword
+              }
+            >
               {isLoading ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   Creating account...
                 </>
               ) : (
@@ -181,10 +245,10 @@ export function SignUpPage() {
           </form>
         </CardContent>
 
-        <CardFooter className="flex flex-col">
-          <p className="text-center text-sm text-muted-foreground">
+        <CardFooter className="flex justify-center border-t border-border/50 py-4">
+          <p className="text-sm text-muted-foreground">
             Already have an account?{' '}
-            <Link to="/login" className="font-medium text-primary hover:underline">
+            <Link to="/login" className="font-semibold text-primary underline-offset-4 hover:underline">
               Sign in
             </Link>
           </p>

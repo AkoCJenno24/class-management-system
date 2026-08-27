@@ -27,7 +27,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { StudentAvatar } from '@/components/students/StudentAvatar';
+import { StudentStatusBadge } from '@/components/students/StudentStatusBadge';
 import { EditGradeDialog } from './EditGradeDialog';
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { showGraceUndoToast } from '@/components/ui/grace-undo-toast';
@@ -35,7 +36,7 @@ import { toast } from 'sonner';
 import { Trash2, Calculator, Filter, ChevronRight, Pencil } from 'lucide-react';
 import type { Grade, Student } from '@/types';
 import { DEFAULT_GRADING_SCALE } from '@/types';
-import { formatDate, formatGrade, getGradeColor, calculatePercentage, getInitials } from '@/lib/utils';
+import { formatDate, formatGrade, getGradeColor, calculatePercentage, formatStudentFullName } from '@/lib/utils';
 
 interface GradeTableProps {
   grades: Grade[];
@@ -221,18 +222,19 @@ export function GradeTable({ grades, students, classId }: GradeTableProps) {
                     >
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-                              {getInitials(student.firstName, student.lastName)}
-                            </AvatarFallback>
-                          </Avatar>
+                          <StudentAvatar student={student} size="default" showStatusIndicator />
                           <div>
-                            <span className="font-semibold text-foreground">
-                              {student.firstName} {student.lastName}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold text-foreground">
+                                {formatStudentFullName(student)}
+                              </span>
+                              {student.status && student.status !== 'active' && (
+                                <StudentStatusBadge status={student.status} showDot={false} className="text-[10px] py-0 px-1.5" />
+                              )}
+                            </div>
                             {student.studentId && (
-                              <span className="ml-2 text-xs text-muted-foreground font-mono">
-                                ({student.studentId})
+                              <span className="text-xs text-muted-foreground font-mono">
+                                ID: {student.studentId}
                               </span>
                             )}
                           </div>
@@ -380,7 +382,7 @@ export function GradeTable({ grades, students, classId }: GradeTableProps) {
                 {filteredGrades.map((grade) => {
                   const student = studentMap.get(grade.studentId);
                   const studentName = student
-                    ? `${student.firstName} ${student.lastName}`
+                    ? formatStudentFullName(student)
                     : 'Unknown Student';
                   const percentage = calculatePercentage(grade.score, grade.maxScore);
                   const displayGrade = formatGrade(grade.score, grade.maxScore, scale);
@@ -388,13 +390,18 @@ export function GradeTable({ grades, students, classId }: GradeTableProps) {
 
                   return (
                     <TableRow key={grade.id}>
-                      <TableCell className="font-semibold text-foreground">
-                        {studentName}
-                        {student?.studentId && (
-                          <span className="ml-2 text-xs text-muted-foreground font-mono">
-                            ({student.studentId})
-                          </span>
-                        )}
+                      <TableCell>
+                        <div className="flex items-center gap-2.5">
+                          {student && <StudentAvatar student={student} size="sm" />}
+                          <div>
+                            <span className="font-semibold text-foreground">{studentName}</span>
+                            {student?.studentId && (
+                              <span className="ml-1.5 text-xs text-muted-foreground font-mono">
+                                ({student.studentId})
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </TableCell>
                       <TableCell className="font-medium">{grade.assignmentName}</TableCell>
                       <TableCell className="text-muted-foreground text-xs">

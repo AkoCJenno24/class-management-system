@@ -2,7 +2,7 @@
  * Firebase Storage service layer for avatar file management.
  * Handles upload, retrieval, and deletion of teacher profile avatars.
  */
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from './config';
 
 /**
@@ -10,9 +10,9 @@ import { storage } from './config';
  * Files are stored at avatars/{uid}/avatar.{ext}
  * Returns the public download URL.
  */
-export async function uploadAvatar(uid: string, file: File): Promise<string> {
-  const extension = file.name.split('.').pop() ?? 'png';
-  const storageRef = ref(storage, `avatars/${uid}/avatar.${extension}`);
+export async function uploadAvatar(uid: string, file: Blob | File): Promise<string> {
+  const timestamp = Date.now();
+  const storageRef = ref(storage, `avatars/${uid}/avatar_${timestamp}.jpg`);
   await uploadBytes(storageRef, file);
   return getDownloadURL(storageRef);
 }
@@ -30,12 +30,19 @@ export async function getAvatarUrl(uid: string): Promise<string | null> {
   }
 }
 
-/** Deletes the user's avatar from Storage. */
-export async function deleteAvatar(uid: string): Promise<void> {
-  try {
-    const storageRef = ref(storage, `avatars/${uid}/avatar.png`);
-    await deleteObject(storageRef);
-  } catch {
-    // Avatar may not exist — that's fine
-  }
+/**
+ * Uploads a student profile avatar image to Firebase Storage.
+ * Files are stored at avatars/{uid}/students/{studentKey}_{timestamp}.jpg
+ * Returns the public download URL.
+ */
+export async function uploadStudentAvatar(
+  uid: string,
+  studentKey: string,
+  file: Blob | File
+): Promise<string> {
+  const timestamp = Date.now();
+  const storageRef = ref(storage, `avatars/${uid}/students/${studentKey}_${timestamp}.jpg`);
+  await uploadBytes(storageRef, file);
+  return getDownloadURL(storageRef);
 }
+

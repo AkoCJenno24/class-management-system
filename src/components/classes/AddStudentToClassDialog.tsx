@@ -15,11 +15,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { StudentAvatar } from '@/components/students/StudentAvatar';
+import { StudentStatusBadge } from '@/components/students/StudentStatusBadge';
 import { toast } from 'sonner';
 import { Loader2, UserPlus, Search } from 'lucide-react';
 import type { Student } from '@/types';
-import { getInitials } from '@/lib/utils';
+import { formatStudentFullName } from '@/lib/utils';
 
 interface AddStudentToClassDialogProps {
   open: boolean;
@@ -45,8 +46,11 @@ export function AddStudentToClassDialog({
     if (s.classIds.includes(classId)) return false;
     if (!search.trim()) return true;
     const term = search.toLowerCase().trim();
+    const fullName = formatStudentFullName(s).toLowerCase();
     return (
+      fullName.includes(term) ||
       s.firstName.toLowerCase().includes(term) ||
+      (s.middleName && s.middleName.toLowerCase().includes(term)) ||
       s.lastName.toLowerCase().includes(term) ||
       (s.gradeLevel && s.gradeLevel.toLowerCase().includes(term)) ||
       (s.studentId && s.studentId.toLowerCase().includes(term))
@@ -97,45 +101,56 @@ export function AddStudentToClassDialog({
                 : 'All matching students are already enrolled in this class.'}
             </div>
           ) : (
-            availableStudents.map((student) => (
-              <div
-                key={student.id}
-                className="flex items-center justify-between rounded-lg border border-border p-3 hover:bg-accent transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-9 w-9">
-                    <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-                      {getInitials(student.firstName, student.lastName)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-sm font-medium">
-                      {student.firstName} {student.lastName}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {student.gradeLevel ? `${student.gradeLevel}` : ''}
-                      {student.gradeLevel && student.studentId ? ' • ' : ''}
-                      {student.studentId ? `ID: ${student.studentId}` : (!student.gradeLevel ? 'No grade level' : '')}
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleAddStudent(student.id)}
-                  disabled={loadingStudentId === student.id}
+            availableStudents.map((student) => {
+              const fullName = formatStudentFullName(student);
+
+              return (
+                <div
+                  key={student.id}
+                  className="flex items-center justify-between rounded-lg border border-border p-3 hover:bg-accent transition-colors"
                 >
-                  {loadingStudentId === student.id ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <>
-                      <UserPlus className="mr-1 h-3 w-3" />
-                      Add
-                    </>
-                  )}
-                </Button>
-              </div>
-            ))
+                  <div className="flex items-center gap-3">
+                    <StudentAvatar student={student} size="default" showStatusIndicator />
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium">{fullName}</p>
+                        {student.status && student.status !== 'active' && (
+                          <StudentStatusBadge
+                            status={student.status}
+                            showDot={false}
+                            className="text-[10px] py-0 px-1.5"
+                          />
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {student.gradeLevel ? `${student.gradeLevel}` : ''}
+                        {student.gradeLevel && student.studentId ? ' • ' : ''}
+                        {student.studentId
+                          ? `ID: ${student.studentId}`
+                          : !student.gradeLevel
+                          ? 'No grade level'
+                          : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleAddStudent(student.id)}
+                    disabled={loadingStudentId === student.id}
+                  >
+                    {loadingStudentId === student.id ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <>
+                        <UserPlus className="mr-1 h-3 w-3" />
+                        Add
+                      </>
+                    )}
+                  </Button>
+                </div>
+              );
+            })
           )}
         </div>
       </DialogContent>
