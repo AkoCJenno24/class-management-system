@@ -1,0 +1,807 @@
+/**
+ * Firestore data access layer.
+ * All database CRUD operations are centralized here.
+ * UI components access data exclusively through these functions.
+ */
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  collection,
+  addDoc,
+  query,
+  where,
+  onSnapshot,
+  serverTimestamp,
+  type Unsubscribe,
+  getDocs,
+  writeBatch,
+  increment,
+} from 'firebase/firestore';
+import { db } from './config';
+import type {
+  TeacherProfile,
+  Class,
+  Student,
+  Activity,
+  ActivityType,
+  Grade,
+  AttendanceRecord,
+  AttendanceStatus,
+  StickyNote,
+  StickyNoteColor,
+  OnboardingData,
+  GradingScale,
+} from '@/types';
+import { DEFAULT_GRADING_SCALE, DEFAULT_GRADE_LEVELS } from '@/types';
+
+// ─── Helper: Convert Firestore timestamps to Date ───────────────────────────
+
+function toDate(timestamp: unknown): Date {
+  if (timestamp && typeof timestamp === 'object' && 'toDate' in timestamp) {
+    return (timestamp as { toDate: () => Date }).toDate();
+  }
+  return new Date();
+}
+
+/** Parses grading scale from Firestore data, falling back to default. */
+function parseGradingScale(data: unknown): GradingScale {
+  if (data && typeof data === 'object' && 'type' in data) {
+    return data as GradingScale;
+  }
+  return DEFAULT_GRADING_SCALE;
+}
+
+// ─── Teacher Profile ─────────────────────────────────────────────────────────
+
+/** Fetches the teacher profile for a given user ID. Returns null if not found. */
+export async function getTeacherProfile(uid: string): Promise<TeacherProfile | null> {
+  const snap = await getDoc(doc(db, 'users', uid));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return {
+    uid,
+    email: data.email ?? '',
+    firstName: data.firstName ?? '',
+    lastName: data.lastName ?? '',
+    school: data.school ?? '',
+    subject: data.subject ?? '',
+    avatarUrl: data.avatarUrl ?? null,
+    avatarPreset: data.avatarPreset ?? null,
+    avatarColor: data.avatarColor ?? '#6366F1',
+    isOnboarded: data.isOnboarded ?? false,
+    gradingScale: parseGradingScale(data.gradingScale),
+    createdAt: toDate(data.createdAt),
+    updatedAt: toDate(data.updatedAt),
+  };
+}
+
+/** Creates the initial teacher profile document after sign-up. */
+export async function createTeacherProfile(uid: string, email: string): Promise<void> {
+  await setDoc(doc(db, 'users', uid), {
+    email,
+    firstName: '',
+    lastName: '',
+    school: '',
+    subject: '',
+    avatarUrl: null,
+    avatarPreset: null,
+    avatarColor: '#6366F1',
+    isOnboarded: false,
+    gradingScale: DEFAULT_GRADING_SCALE,
+    gradeLevels: DEFAULT_GRADE_LEVELS,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Completes the onboarding process by updating the teacher profile. */
+export async function completeOnboarding(uid: string, data: OnboardingData): Promise<void> {
+  const profilePayload: Record<string, unknown> = {
+    firstName: data.firstName ?? '',
+    lastName: data.lastName ?? '',
+    school: data.school ?? '',
+    subject: data.subject ?? '',
+    avatarColor: data.avatarColor ?? '#6366F1',
+    avatarPreset: data.avatarPreset ?? null,
+    gradingScale: data.gradingScale ?? DEFAULT_GRADING_SCALE,
+    gradeLevels: DEFAULT_GRADE_LEVELS,
+    isOnboarded: true,
+    updatedAt: serverTimestamp(),
+  };
+
+  await setDoc(doc(db, 'users', uid), profilePayload, { merge: true });
+}
+
+/** Updates specific fields on the teacher profile. */
+export async function updateTeacherProfile(
+  uid: string,
+  updates: Partial<Omit<TeacherProfile, 'uid' | 'createdAt' | 'updatedAt'>>
+): Promise<void> {
+  await updateDoc(doc(db, 'users', uid), {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Subscribes to real-time changes on the teacher profile. */
+export function onTeacherProfileChange(
+  uid: string,
+  callback: (profile: TeacherProfile | null) => void
+): Unsubscribe {
+  return onSnapshot(doc(db, 'users', uid), (snap) => {
+    if (!snap.exists()) {
+      callback(null);
+      return;
+    }
+    const data = snap.data();
+    callback({
+      uid,
+      email: data.email ?? '',
+      firstName: data.firstName ?? '',
+      lastName: data.lastName ?? '',
+      school: data.school ?? '',
+      subject: data.subject ?? '',
+      avatarUrl: data.avatarUrl ?? null,
+      avatarPreset: data.avatarPreset ?? null,
+      avatarColor: data.avatarColor ?? '#6366F1',
+      isOnboarded: data.isOnboarded ?? false,
+      gradingScale: parseGradingScale(data.gradingScale),
+      gradeLevels: Array.isArray(data.gradeLevels) && data.gradeLevels.length > 0 ? data.gradeLevels : DEFAULT_GRADE_LEVELS,
+      createdAt: toDate(data.createdAt),
+      updatedAt: toDate(data.updatedAt),
+    });
+  });
+}
+
+// ─── Classes ─────────────────────────────────────────────────────────────────
+
+/** Creates a new class for the teacher. Returns the new class ID. */
+export async function createClass(
+  uid: string,
+  data: { name: string; subject: string; description: string }
+): Promise<string> {
+  const ref = await addDoc(collection(db, 'users', uid, 'classes'), {
+    name: data.name,
+    subject: data.subject,
+    description: data.description,
+    studentCount: 0,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+/** Updates an existing class. */
+export async function updateClass(
+  uid: string,
+  classId: string,
+  updates: Partial<Omit<Class, 'id' | 'createdAt' | 'updatedAt' | 'studentCount'>>
+): Promise<void> {
+  await updateDoc(doc(db, 'users', uid, 'classes', classId), {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Deletes a class and removes it from all enrolled students. */
+export async function deleteClass(uid: string, classId: string): Promise<void> {
+  const batch = writeBatch(db);
+
+  // Remove classId from all students enrolled in this class
+  const studentsSnap = await getDocs(
+    query(collection(db, 'users', uid, 'students'), where('classIds', 'array-contains', classId))
+  );
+  for (const studentDoc of studentsSnap.docs) {
+    const currentClassIds: string[] = studentDoc.data().classIds ?? [];
+    batch.update(studentDoc.ref, {
+      classIds: currentClassIds.filter((id) => id !== classId),
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  // Delete all grades for this class
+  const gradesSnap = await getDocs(
+    query(collection(db, 'users', uid, 'grades'), where('classId', '==', classId))
+  );
+  for (const gradeDoc of gradesSnap.docs) {
+    batch.delete(gradeDoc.ref);
+  }
+
+  // Delete the class itself
+  batch.delete(doc(db, 'users', uid, 'classes', classId));
+  await batch.commit();
+}
+
+/** Subscribes to real-time changes on all classes for a teacher. */
+export function onClassesChange(
+  uid: string,
+  callback: (classes: Class[]) => void
+): Unsubscribe {
+  const q = query(collection(db, 'users', uid, 'classes'));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const classes: Class[] = snap.docs.map((d) => ({
+        id: d.id,
+        name: d.data().name ?? '',
+        subject: d.data().subject ?? '',
+        description: d.data().description ?? '',
+        studentCount: d.data().studentCount ?? 0,
+        createdAt: toDate(d.data().createdAt),
+        updatedAt: toDate(d.data().updatedAt),
+      }));
+      classes.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      callback(classes);
+    },
+    (err) => {
+      console.error('Error in onClassesChange listener:', err);
+    }
+  );
+}
+
+/** Fetches a single class by ID. */
+export async function getClass(uid: string, classId: string): Promise<Class | null> {
+  const snap = await getDoc(doc(db, 'users', uid, 'classes', classId));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return {
+    id: snap.id,
+    name: data.name ?? '',
+    subject: data.subject ?? '',
+    description: data.description ?? '',
+    studentCount: data.studentCount ?? 0,
+    createdAt: toDate(data.createdAt),
+    updatedAt: toDate(data.updatedAt),
+  };
+}
+
+// ─── Students ────────────────────────────────────────────────────────────────
+
+/** Creates a new student in the global roster. Returns the new student ID. */
+/** Creates a new student in the global roster. Returns the new student ID. */
+export async function createStudent(
+  uid: string,
+  data: {
+    firstName: string;
+    lastName: string;
+    studentId?: string | null;
+    gradeLevel?: string | null;
+    email?: string | null;
+  }
+): Promise<string> {
+  const ref = await addDoc(collection(db, 'users', uid, 'students'), {
+    firstName: data.firstName,
+    lastName: data.lastName,
+    studentId: data.studentId ?? null,
+    gradeLevel: data.gradeLevel ?? null,
+    email: data.email ?? null,
+    classIds: [],
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+/** Updates an existing student. */
+export async function updateStudent(
+  uid: string,
+  studentId: string,
+  updates: Partial<Omit<Student, 'id' | 'createdAt' | 'updatedAt' | 'classIds'>>
+): Promise<void> {
+  await updateDoc(doc(db, 'users', uid, 'students', studentId), {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Deletes a student and all their grades. */
+export async function deleteStudent(uid: string, studentId: string): Promise<void> {
+  const batch = writeBatch(db);
+
+  // Get the student to find their classes (to decrement studentCount)
+  const studentSnap = await getDoc(doc(db, 'users', uid, 'students', studentId));
+  if (studentSnap.exists()) {
+    const classIds: string[] = studentSnap.data().classIds ?? [];
+    for (const classId of classIds) {
+      batch.update(doc(db, 'users', uid, 'classes', classId), {
+        studentCount: increment(-1),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  }
+
+  // Delete all grades for this student
+  const gradesSnap = await getDocs(
+    query(collection(db, 'users', uid, 'grades'), where('studentId', '==', studentId))
+  );
+  for (const gradeDoc of gradesSnap.docs) {
+    batch.delete(gradeDoc.ref);
+  }
+
+  // Delete the student
+  batch.delete(doc(db, 'users', uid, 'students', studentId));
+  await batch.commit();
+}
+
+/** Subscribes to real-time changes on all students for a teacher. */
+export function onStudentsChange(
+  uid: string,
+  callback: (students: Student[]) => void
+): Unsubscribe {
+  const q = query(collection(db, 'users', uid, 'students'));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const students: Student[] = snap.docs.map((d) => ({
+        id: d.id,
+        firstName: d.data().firstName ?? '',
+        lastName: d.data().lastName ?? '',
+        email: d.data().email ?? null,
+        studentId: d.data().studentId ?? null,
+        gradeLevel: d.data().gradeLevel ?? null,
+        classIds: d.data().classIds ?? [],
+        createdAt: toDate(d.data().createdAt),
+        updatedAt: toDate(d.data().updatedAt),
+      }));
+      students.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      callback(students);
+    },
+    (err) => {
+      console.error('Error in onStudentsChange listener:', err);
+    }
+  );
+}
+
+/** Adds a student to a class. Updates both the student's classIds and the class's studentCount. */
+export async function addStudentToClass(
+  uid: string,
+  studentId: string,
+  classId: string
+): Promise<void> {
+  const batch = writeBatch(db);
+  const studentRef = doc(db, 'users', uid, 'students', studentId);
+  const studentSnap = await getDoc(studentRef);
+
+  if (!studentSnap.exists()) throw new Error('Student not found');
+
+  const currentClassIds: string[] = studentSnap.data().classIds ?? [];
+  if (currentClassIds.includes(classId)) return; // Already enrolled
+
+  batch.update(studentRef, {
+    classIds: [...currentClassIds, classId],
+    updatedAt: serverTimestamp(),
+  });
+
+  batch.update(doc(db, 'users', uid, 'classes', classId), {
+    studentCount: increment(1),
+    updatedAt: serverTimestamp(),
+  });
+
+  await batch.commit();
+}
+
+/** Removes a student from a class. */
+export async function removeStudentFromClass(
+  uid: string,
+  studentId: string,
+  classId: string
+): Promise<void> {
+  const batch = writeBatch(db);
+  const studentRef = doc(db, 'users', uid, 'students', studentId);
+  const studentSnap = await getDoc(studentRef);
+
+  if (!studentSnap.exists()) throw new Error('Student not found');
+
+  const currentClassIds: string[] = studentSnap.data().classIds ?? [];
+  batch.update(studentRef, {
+    classIds: currentClassIds.filter((id) => id !== classId),
+    updatedAt: serverTimestamp(),
+  });
+
+  batch.update(doc(db, 'users', uid, 'classes', classId), {
+    studentCount: increment(-1),
+    updatedAt: serverTimestamp(),
+  });
+
+  // Also delete grades for this student in this class
+  const gradesSnap = await getDocs(
+    query(
+      collection(db, 'users', uid, 'grades'),
+      where('studentId', '==', studentId),
+      where('classId', '==', classId)
+    )
+  );
+  for (const gradeDoc of gradesSnap.docs) {
+    batch.delete(gradeDoc.ref);
+  }
+
+  await batch.commit();
+}
+
+// ─── Grades ──────────────────────────────────────────────────────────────────
+
+/** Creates a new grade entry. Returns the new grade ID. */
+export async function createGrade(
+  uid: string,
+  data: {
+    studentId: string;
+    classId: string;
+    assignmentName: string;
+    score: number;
+    maxScore: number;
+    date: Date;
+  }
+): Promise<string> {
+  const ref = await addDoc(collection(db, 'users', uid, 'grades'), {
+    studentId: data.studentId,
+    classId: data.classId,
+    assignmentName: data.assignmentName,
+    score: data.score,
+    maxScore: data.maxScore,
+    date: data.date,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+/** Updates an existing grade. */
+export async function updateGrade(
+  uid: string,
+  gradeId: string,
+  updates: Partial<Omit<Grade, 'id' | 'createdAt' | 'updatedAt' | 'studentId' | 'classId'>>
+): Promise<void> {
+  await updateDoc(doc(db, 'users', uid, 'grades', gradeId), {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Deletes a grade entry. */
+export async function deleteGrade(uid: string, gradeId: string): Promise<void> {
+  await deleteDoc(doc(db, 'users', uid, 'grades', gradeId));
+}
+
+/** Subscribes to real-time changes on grades for a specific class. */
+export function onClassGradesChange(
+  uid: string,
+  classId: string,
+  callback: (grades: Grade[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, 'users', uid, 'grades'),
+    where('classId', '==', classId)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const grades: Grade[] = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          studentId: data.studentId ?? '',
+          classId: data.classId ?? '',
+          assignmentName: data.assignmentName ?? '',
+          score: data.score ?? 0,
+          maxScore: data.maxScore ?? 100,
+          date: toDate(data.date),
+          createdAt: toDate(data.createdAt),
+          updatedAt: toDate(data.updatedAt),
+        };
+      });
+      // Sort in memory by date descending, then createdAt descending
+      grades.sort((a, b) => b.date.getTime() - a.date.getTime() || b.createdAt.getTime() - a.createdAt.getTime());
+      callback(grades);
+    },
+    (err) => {
+      console.error('Error in onClassGradesChange listener:', err);
+    }
+  );
+}
+
+// ─── Attendance ──────────────────────────────────────────────────────────────
+
+/**
+ * Saves or updates daily attendance for a class on a specific date (YYYY-MM-DD).
+ * Document is stored at users/{uid}/attendance/{classId_date}.
+ */
+export async function saveAttendanceRecord(
+  uid: string,
+  classId: string,
+  date: string,
+  statuses: Record<string, AttendanceStatus>
+): Promise<void> {
+  const docId = `${classId}_${date}`;
+  const docRef = doc(db, 'users', uid, 'attendance', docId);
+
+  await setDoc(
+    docRef,
+    {
+      classId,
+      date,
+      statuses,
+      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+/** Fetches attendance record for a specific class and date. */
+export async function getAttendanceRecord(
+  uid: string,
+  classId: string,
+  date: string
+): Promise<AttendanceRecord | null> {
+  const docId = `${classId}_${date}`;
+  const snap = await getDoc(doc(db, 'users', uid, 'attendance', docId));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return {
+    id: snap.id,
+    classId: data.classId ?? classId,
+    date: data.date ?? date,
+    statuses: data.statuses ?? {},
+    createdAt: toDate(data.createdAt),
+    updatedAt: toDate(data.updatedAt),
+  };
+}
+
+/** Subscribes to real-time changes on attendance for a specific class and date. */
+export function onAttendanceRecordChange(
+  uid: string,
+  classId: string,
+  date: string,
+  callback: (record: AttendanceRecord | null) => void
+): Unsubscribe {
+  const docId = `${classId}_${date}`;
+  return onSnapshot(
+    doc(db, 'users', uid, 'attendance', docId),
+    (snap) => {
+      if (!snap.exists()) {
+        callback(null);
+        return;
+      }
+      const data = snap.data();
+      callback({
+        id: snap.id,
+        classId: data.classId ?? classId,
+        date: data.date ?? date,
+        statuses: data.statuses ?? {},
+        createdAt: toDate(data.createdAt),
+        updatedAt: toDate(data.updatedAt),
+      });
+    },
+    (err) => {
+      console.error('Error in onAttendanceRecordChange listener:', err);
+    }
+  );
+}
+
+/** Subscribes to all attendance records for a specific class across all dates. */
+export function onClassAttendanceChange(
+  uid: string,
+  classId: string,
+  callback: (records: AttendanceRecord[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, 'users', uid, 'attendance'),
+    where('classId', '==', classId)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const records: AttendanceRecord[] = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          classId: data.classId ?? classId,
+          date: data.date ?? '',
+          statuses: data.statuses ?? {},
+          createdAt: toDate(data.createdAt),
+          updatedAt: toDate(data.updatedAt),
+        };
+      });
+      records.sort((a, b) => b.date.localeCompare(a.date));
+      callback(records);
+    },
+    (err) => {
+      console.error('Error in onClassAttendanceChange listener:', err);
+    }
+  );
+}
+
+// ─── Class Activities ───────────────────────────────────────────────────────
+
+/** Creates a new activity definition for a class. */
+export async function createActivity(
+  uid: string,
+  data: {
+    classId: string;
+    name: string;
+    type: ActivityType;
+    maxScore: number;
+    description?: string;
+    dueDate?: Date | null;
+  }
+): Promise<string> {
+  const ref = await addDoc(collection(db, 'users', uid, 'activities'), {
+    classId: data.classId,
+    name: data.name,
+    type: data.type,
+    maxScore: data.maxScore,
+    description: data.description ?? '',
+    dueDate: data.dueDate ? data.dueDate : null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+/** Updates an existing activity definition. */
+export async function updateActivity(
+  uid: string,
+  activityId: string,
+  data: Partial<Pick<Activity, 'name' | 'type' | 'maxScore' | 'description' | 'dueDate'>>
+): Promise<void> {
+  const updatePayload: Record<string, unknown> = {
+    updatedAt: serverTimestamp(),
+  };
+  if (data.name !== undefined) updatePayload.name = data.name;
+  if (data.type !== undefined) updatePayload.type = data.type;
+  if (data.maxScore !== undefined) updatePayload.maxScore = data.maxScore;
+  if (data.description !== undefined) updatePayload.description = data.description;
+  if (data.dueDate !== undefined) updatePayload.dueDate = data.dueDate;
+
+  await updateDoc(doc(db, 'users', uid, 'activities', activityId), updatePayload);
+}
+
+/** Deletes an activity definition. */
+export async function deleteActivity(uid: string, activityId: string): Promise<void> {
+  await deleteDoc(doc(db, 'users', uid, 'activities', activityId));
+}
+
+/** Fetches all activities defined for a specific class. */
+export async function getClassActivities(uid: string, classId: string): Promise<Activity[]> {
+  const q = query(
+    collection(db, 'users', uid, 'activities'),
+    where('classId', '==', classId)
+  );
+  const snap = await getDocs(q);
+  const list: Activity[] = snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      classId: data.classId ?? classId,
+      name: data.name ?? '',
+      type: data.type ?? 'quiz',
+      maxScore: data.maxScore ?? 100,
+      description: data.description ?? '',
+      dueDate: data.dueDate ? toDate(data.dueDate) : null,
+      createdAt: toDate(data.createdAt),
+      updatedAt: toDate(data.updatedAt),
+    };
+  });
+  list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return list;
+}
+
+/** Subscribes to real-time changes on activities for a specific class. */
+export function onClassActivitiesChange(
+  uid: string,
+  classId: string,
+  callback: (activities: Activity[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, 'users', uid, 'activities'),
+    where('classId', '==', classId)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const activities: Activity[] = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          classId: data.classId ?? classId,
+          name: data.name ?? '',
+          type: data.type ?? 'quiz',
+          maxScore: data.maxScore ?? 100,
+          description: data.description ?? '',
+          dueDate: data.dueDate ? toDate(data.dueDate) : null,
+          createdAt: toDate(data.createdAt),
+          updatedAt: toDate(data.updatedAt),
+        };
+      });
+      activities.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      callback(activities);
+    },
+    (err) => {
+      console.error('Error in onClassActivitiesChange listener:', err);
+    }
+  );
+}
+
+// ─── Sticky Notes ───────────────────────────────────────────────────────────
+
+/** Creates a new sticky note on the teacher's dashboard. */
+export async function createStickyNote(
+  uid: string,
+  data: {
+    title: string;
+    content: string;
+    color: StickyNoteColor;
+    isPinned?: boolean;
+  }
+): Promise<string> {
+  const ref = await addDoc(collection(db, 'users', uid, 'notes'), {
+    title: data.title,
+    content: data.content,
+    color: data.color,
+    isPinned: data.isPinned ?? false,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+/** Updates an existing sticky note. */
+export async function updateStickyNote(
+  uid: string,
+  noteId: string,
+  data: Partial<Pick<StickyNote, 'title' | 'content' | 'color' | 'isPinned'>>
+): Promise<void> {
+  const updatePayload: Record<string, unknown> = {
+    updatedAt: serverTimestamp(),
+  };
+  if (data.title !== undefined) updatePayload.title = data.title;
+  if (data.content !== undefined) updatePayload.content = data.content;
+  if (data.color !== undefined) updatePayload.color = data.color;
+  if (data.isPinned !== undefined) updatePayload.isPinned = data.isPinned;
+
+  await updateDoc(doc(db, 'users', uid, 'notes', noteId), updatePayload);
+}
+
+/** Deletes a sticky note. */
+export async function deleteStickyNote(uid: string, noteId: string): Promise<void> {
+  await deleteDoc(doc(db, 'users', uid, 'notes', noteId));
+}
+
+/** Subscribes to real-time changes on sticky notes for the teacher. */
+export function onStickyNotesChange(
+  uid: string,
+  callback: (notes: StickyNote[]) => void
+): Unsubscribe {
+  const q = query(collection(db, 'users', uid, 'notes'));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const notes: StickyNote[] = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          title: data.title ?? '',
+          content: data.content ?? '',
+          color: data.color ?? 'yellow',
+          isPinned: data.isPinned ?? false,
+          createdAt: toDate(data.createdAt),
+          updatedAt: toDate(data.updatedAt),
+        };
+      });
+      // Pinned notes first, then newest notes
+      notes.sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      });
+      callback(notes);
+    },
+    (err) => {
+      console.error('Error in onStickyNotesChange listener:', err);
+    }
+  );
+}
+
