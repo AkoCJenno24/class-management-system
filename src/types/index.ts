@@ -190,8 +190,36 @@ export interface StickyNote {
   content: string;
   color: StickyNoteColor;
   isPinned?: boolean;
+  order?: number;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** Supported task priorities */
+export type TodoPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+/** Supported task categories for teachers */
+export type TodoCategory =
+  | 'lesson'
+  | 'grading'
+  | 'administrative'
+  | 'meeting'
+  | 'general'
+  | 'other';
+
+/** Teacher To-Do item stored in Firestore under users/{uid}/todos */
+export interface TodoItem {
+  id: string;
+  title: string;
+  description?: string;
+  completed: boolean;
+  priority: TodoPriority;
+  category: TodoCategory;
+  dueDate?: Date | null;
+  isPinned?: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  completedAt?: Date | null;
 }
 
 /** Data collected during the onboarding wizard */
@@ -238,3 +266,40 @@ export const AVATAR_COLORS = [
   '#3B82F6', // Blue
   '#6B7280', // Gray
 ] as const;
+
+/** Supported notification types */
+export type NotificationType =
+  | 'deadline'
+  | 'reminder'
+  | 'activity'
+  | 'grade'
+  | 'system'
+  | 'info'
+  | 'warning'
+  | 'success';
+
+/** Supported notification categories */
+export type NotificationCategory =
+  | 'todo'
+  | 'activity'
+  | 'class'
+  | 'student'
+  | 'grade'
+  | 'system'
+  | 'general';
+
+/** Global App Notification model stored in Firestore under users/{uid}/notifications */
+export interface AppNotification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+  category: NotificationCategory;
+  link?: string;
+  read: boolean;
+  createdAt: Date;
+  entityId?: string;
+  metadata?: Record<string, unknown>;
+}
+

@@ -5,7 +5,7 @@
  * 2) Detailed Activity Grade Log with filter-by-student capability
  * Formats scores according to the teacher's configured grading scale (letter, percentage, numeric).
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { deleteGrade } from '@/lib/firebase/firestore';
@@ -29,6 +29,8 @@ import {
 } from '@/components/ui/select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { EditGradeDialog } from './EditGradeDialog';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
+import { showGraceUndoToast } from '@/components/ui/grace-undo-toast';
 import { toast } from 'sonner';
 import { Trash2, Calculator, Filter, ChevronRight, Pencil } from 'lucide-react';
 import type { Grade, Student } from '@/types';
@@ -43,42 +45,51 @@ interface GradeTableProps {
 
 export function GradeTable({ grades, students, classId }: GradeTableProps) {
   const { user, teacherProfile } = useAuth();
-  const scale = teacherProfile?.gradingScale || DEFAULT_GRADING_SCALE;
-
   const [selectedStudentFilter, setSelectedStudentFilter] = useState<string>('all');
   const [editingGrade, setEditingGrade] = useState<Grade | null>(null);
+  const [gradeToDelete, setGradeToDelete] = useState<Grade | null>(null);
 
-  const studentMap = useMemo(() => new Map<string, Student>(students.map((s) => [s.id, s])), [students]);
+  // Grace Period & Undo registry
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
+  const pendingDeletesRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  // Compute combined averages for each student across all their activities/quizzes in this class
+  // Cleanup timers on unmount
+  useEffect(() => {
+    const activeTimers = pendingDeletesRef.current;
+    return () => {
+      activeTimers.forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
+  const scale = teacherProfile?.gradingScale || DEFAULT_GRADING_SCALE;
+
+  const studentMap = useMemo(() => {
+    return new Map<string, Student>(students.map((s) => [s.id, s]));
+  }, [students]);
+
+  const visibleGrades = useMemo(() => {
+    return grades.filter((g) => !pendingDeleteIds.has(g.id));
+  }, [grades, pendingDeleteIds]);
+
+  // Compute per-student summaries for all enrolled students
   const studentSummaries = useMemo(() => {
     return students.map((student) => {
-      const studentGrades = grades.filter((g) => g.studentId === student.id);
+      const studentGrades = visibleGrades.filter((g) => g.studentId === student.id);
       const totalActivities = studentGrades.length;
-
-      if (totalActivities === 0) {
-        return {
-          student,
-          totalActivities: 0,
-          totalScore: 0,
-          totalMaxScore: 0,
-          averagePercentage: null,
-          formattedGrade: 'N/A',
-          gradeColor: '#71717a',
-        };
-      }
-
       const totalScore = studentGrades.reduce((sum, g) => sum + g.score, 0);
       const totalMaxScore = studentGrades.reduce((sum, g) => sum + g.maxScore, 0);
-      
-      // Calculate unweighted percentage average of each assignment for fair averaging
-      const sumPercentages = studentGrades.reduce(
-        (sum, g) => sum + calculatePercentage(g.score, g.maxScore),
-        0
-      );
-      const averagePercentage = Math.round(sumPercentages / totalActivities);
-      const formattedGrade = formatGrade(averagePercentage, 100, scale);
-      const gradeColor = getGradeColor(averagePercentage, 100, scale);
+
+      const averagePercentage =
+        totalMaxScore > 0
+          ? Math.round((totalScore / totalMaxScore) * 100)
+          : null;
+
+      const formattedGrade =
+        averagePercentage !== null ? formatGrade(averagePercentage, 100, scale) : 'N/A';
+      const gradeColor =
+        averagePercentage !== null
+          ? getGradeColor(averagePercentage, 100, scale)
+          : 'text-muted-foreground';
 
       return {
         student,
@@ -90,24 +101,61 @@ export function GradeTable({ grades, students, classId }: GradeTableProps) {
         gradeColor,
       };
     });
-  }, [students, grades, scale]);
+  }, [students, visibleGrades, scale]);
 
-  const handleDelete = async (gradeId: string) => {
-    if (!user) return;
-    if (!confirm('Are you sure you want to delete this grade?')) return;
+  const handleConfirmDeleteGrade = () => {
+    if (!user || !gradeToDelete) return;
+    const grade = gradeToDelete;
+    const gradeId = grade.id;
+    const student = studentMap.get(grade.studentId);
+    const label = `${grade.assignmentName} (${student ? `${student.firstName} ${student.lastName}` : 'Grade'}: ${grade.score}/${grade.maxScore})`;
 
-    try {
-      await deleteGrade(user.uid, gradeId);
-      toast.success('Grade entry removed.');
-    } catch {
-      toast.error('Failed to delete grade.');
-    }
+    setGradeToDelete(null);
+
+    // Optimistically hide grade entry
+    setPendingDeleteIds((prev) => new Set(prev).add(gradeId));
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        await deleteGrade(user.uid, gradeId);
+      } catch {
+        toast.error(`Failed to delete grade "${label}".`);
+      } finally {
+        pendingDeletesRef.current.delete(gradeId);
+        setPendingDeleteIds((prev) => {
+          const next = new Set(prev);
+          next.delete(gradeId);
+          return next;
+        });
+      }
+    }, 5000);
+
+    pendingDeletesRef.current.set(gradeId, timeoutId);
+
+    showGraceUndoToast({
+      title: 'Grade entry deleted',
+      subtitle: label,
+      duration: 5000,
+      onUndo: () => {
+        const timer = pendingDeletesRef.current.get(gradeId);
+        if (timer) {
+          clearTimeout(timer);
+          pendingDeletesRef.current.delete(gradeId);
+        }
+        setPendingDeleteIds((prev) => {
+          const next = new Set(prev);
+          next.delete(gradeId);
+          return next;
+        });
+        toast.success(`Restored grade for "${label}"`);
+      },
+    });
   };
 
   const filteredGrades = useMemo(() => {
-    if (selectedStudentFilter === 'all') return grades;
-    return grades.filter((g) => g.studentId === selectedStudentFilter);
-  }, [grades, selectedStudentFilter]);
+    if (selectedStudentFilter === 'all') return visibleGrades;
+    return visibleGrades.filter((g) => g.studentId === selectedStudentFilter);
+  }, [visibleGrades, selectedStudentFilter]);
 
   if (grades.length === 0 && students.length === 0) {
     return (
@@ -384,7 +432,7 @@ export function GradeTable({ grades, students, classId }: GradeTableProps) {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-destructive hover:bg-destructive/10 cursor-pointer"
-                            onClick={() => handleDelete(grade.id)}
+                            onClick={() => setGradeToDelete(grade)}
                             title="Delete grade"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -409,6 +457,28 @@ export function GradeTable({ grades, students, classId }: GradeTableProps) {
         onOpenChange={(open) => {
           if (!open) setEditingGrade(null);
         }}
+      />
+
+      {/* Confirm Delete Grade Dialog */}
+      <ConfirmDeleteDialog
+        open={Boolean(gradeToDelete)}
+        onOpenChange={(open) => !open && setGradeToDelete(null)}
+        title="Delete Grade Entry?"
+        itemName={gradeToDelete ? `${gradeToDelete.assignmentName} (${studentMap.get(gradeToDelete.studentId)?.firstName || 'Student'})` : ''}
+        description={
+          gradeToDelete ? (
+            <>
+              Are you sure you want to delete the score of{' '}
+              <span className="font-bold text-foreground">
+                {gradeToDelete.score} / {gradeToDelete.maxScore}
+              </span>{' '}
+              for <span className="font-semibold text-foreground">"{gradeToDelete.assignmentName}"</span>? You will
+              have a 5-second grace period with Undo to restore it.
+            </>
+          ) : undefined
+        }
+        confirmText="Delete Grade"
+        onConfirm={handleConfirmDeleteGrade}
       />
     </div>
   );

@@ -7,7 +7,7 @@
  * 4) Grades & Combined Averages
  * 5) Class Settings (Edit/Delete)
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -29,6 +29,8 @@ import { AddGradeDialog } from '@/components/grades/AddGradeDialog';
 import { GradeTable } from '@/components/grades/GradeTable';
 import { AttendanceMonitor } from '@/components/attendance/AttendanceMonitor';
 import { ActivityManager } from '@/components/activities/ActivityManager';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
+import { showGraceUndoToast } from '@/components/ui/grace-undo-toast';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { toast } from 'sonner';
@@ -69,7 +71,22 @@ export function ClassDetailPage() {
   const [editSubject, setEditSubject] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [isSavingSettings, setIsSavingSettings] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+
+  const [studentToRemove, setStudentToRemove] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleteClassDialogOpen, setIsDeleteClassDialogOpen] = useState(false);
+  const [isDeletingClass, setIsDeletingClass] = useState(false);
+
+  // Grace period & Undo registry for student removals
+  const [pendingRemoveStudentIds, setPendingRemoveStudentIds] = useState<Set<string>>(new Set());
+  const pendingRemovesRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    const activeTimers = pendingRemovesRef.current;
+    return () => {
+      activeTimers.forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
 
   useEffect(() => {
     if (!user || !classId) return;
@@ -115,8 +132,10 @@ export function ClassDetailPage() {
     );
   }
 
-  // Filter students enrolled in this specific class
-  const enrolledStudents = allStudents.filter((s) => s.classIds.includes(classId!));
+  // Filter students enrolled in this specific class (excluding pending removals)
+  const enrolledStudents = allStudents.filter(
+    (s) => s.classIds.includes(classId!) && !pendingRemoveStudentIds.has(s.id)
+  );
 
   const scale = teacherProfile?.gradingScale || DEFAULT_GRADING_SCALE;
 
@@ -157,37 +176,64 @@ export function ClassDetailPage() {
     }
   };
 
-  const handleDeleteClass = async () => {
+  const handleConfirmDeleteClass = async () => {
     if (!user || !classId) return;
-    if (
-      !confirm(
-        `Are you sure you want to permanently delete "${currentClass.name}"? This action cannot be undone.`
-      )
-    ) {
-      return;
-    }
 
-    setIsDeleting(true);
+    setIsDeletingClass(true);
     try {
       await deleteClass(user.uid, classId);
       toast.success(`Class "${currentClass.name}" deleted.`);
       navigate('/classes');
     } catch {
       toast.error('Failed to delete class.');
-      setIsDeleting(false);
+      setIsDeletingClass(false);
     }
   };
 
-  const handleRemoveStudent = async (studentId: string, studentName: string) => {
-    if (!user || !classId) return;
-    if (!confirm(`Remove ${studentName} from ${currentClass.name}?`)) return;
+  const handleConfirmRemoveStudent = () => {
+    if (!user || !classId || !studentToRemove) return;
 
-    try {
-      await removeStudentFromClass(user.uid, studentId, classId);
-      toast.success(`${studentName} removed from class.`);
-    } catch {
-      toast.error('Failed to remove student.');
-    }
+    const { id: studentId, name: studentName } = studentToRemove;
+    setStudentToRemove(null);
+
+    // Optimistically hide student from class
+    setPendingRemoveStudentIds((prev) => new Set(prev).add(studentId));
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        await removeStudentFromClass(user.uid, studentId, classId);
+      } catch {
+        toast.error(`Failed to remove ${studentName} from class.`);
+      } finally {
+        pendingRemovesRef.current.delete(studentId);
+        setPendingRemoveStudentIds((prev) => {
+          const next = new Set(prev);
+          next.delete(studentId);
+          return next;
+        });
+      }
+    }, 5000);
+
+    pendingRemovesRef.current.set(studentId, timeoutId);
+
+    showGraceUndoToast({
+      title: 'Student removed from class',
+      subtitle: `${studentName} removed from ${currentClass.name}`,
+      duration: 5000,
+      onUndo: () => {
+        const timer = pendingRemovesRef.current.get(studentId);
+        if (timer) {
+          clearTimeout(timer);
+          pendingRemovesRef.current.delete(studentId);
+        }
+        setPendingRemoveStudentIds((prev) => {
+          const next = new Set(prev);
+          next.delete(studentId);
+          return next;
+        });
+        toast.success(`Restored ${studentName} to ${currentClass.name}`);
+      },
+    });
   };
 
   return (
@@ -357,10 +403,10 @@ export function ClassDetailPage() {
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            handleRemoveStudent(
-                              student.id,
-                              `${student.firstName} ${student.lastName}`
-                            );
+                            setStudentToRemove({
+                              id: student.id,
+                              name: `${student.firstName} ${student.lastName}`,
+                            });
                           }}
                           title="Remove from class"
                         >
@@ -527,21 +573,11 @@ export function ClassDetailPage() {
             <CardContent>
               <Button
                 variant="destructive"
-                onClick={handleDeleteClass}
-                disabled={isDeleting}
+                onClick={() => setIsDeleteClassDialogOpen(true)}
                 className="cursor-pointer"
               >
-                {isDeleting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Deleting...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete Class
-                  </>
-                )}
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Class
               </Button>
             </CardContent>
           </Card>
@@ -568,6 +604,44 @@ export function ClassDetailPage() {
         activities={activities}
         grades={grades}
         preselectedActivity={selectedActivityForGrade}
+      />
+
+      {/* Remove Student Confirmation Dialog */}
+      <ConfirmDeleteDialog
+        open={Boolean(studentToRemove)}
+        onOpenChange={(open) => !open && setStudentToRemove(null)}
+        title="Remove Student from Class?"
+        itemName={studentToRemove?.name}
+        description={
+          studentToRemove ? (
+            <>
+              Are you sure you want to remove{' '}
+              <span className="font-semibold text-foreground">"{studentToRemove.name}"</span> from{' '}
+              <span className="font-semibold text-foreground">{currentClass.name}</span>? You will
+              have a 5-second grace period with Undo to restore them.
+            </>
+          ) : undefined
+        }
+        confirmText="Remove from Class"
+        onConfirm={handleConfirmRemoveStudent}
+      />
+
+      {/* Delete Class Confirmation Dialog */}
+      <ConfirmDeleteDialog
+        open={isDeleteClassDialogOpen}
+        onOpenChange={setIsDeleteClassDialogOpen}
+        title="Delete Class Workspace?"
+        itemName={currentClass.name}
+        description={
+          <>
+            Are you sure you want to permanently delete{' '}
+            <span className="font-semibold text-foreground">"{currentClass.name}"</span>? All
+            activities, student enrollments, and grades for this class will be permanently removed.
+          </>
+        }
+        confirmText="Delete Class"
+        isLoading={isDeletingClass}
+        onConfirm={handleConfirmDeleteClass}
       />
     </div>
   );

@@ -6,18 +6,21 @@
  * 3) Quick note creation dialog and on-the-fly color changing
  * 4) Edit and delete capabilities with real-time Firestore persistence
  */
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   createStickyNote,
   updateStickyNote,
   deleteStickyNote,
+  reorderStickyNotes,
 } from '@/lib/firebase/firestore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
+import { showGraceUndoToast } from '@/components/ui/grace-undo-toast';
 import {
   Dialog,
   DialogContent,
@@ -35,9 +38,10 @@ import {
   Pencil,
   Loader2,
   Check,
+  GripVertical,
 } from 'lucide-react';
 import type { StickyNote, StickyNoteColor } from '@/types';
-import { formatDate } from '@/lib/utils';
+import { formatDate, autoCapitalizeSentences } from '@/lib/utils';
 
 interface StickyNotesBoardProps {
   notes: StickyNote[];
@@ -94,6 +98,11 @@ const COLOR_KEYS: StickyNoteColor[] = ['yellow', 'blue', 'green', 'pink', 'purpl
 export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
   const { user } = useAuth();
 
+  const [items, setItems] = useState<StickyNote[]>(notes);
+  const [prevNotes, setPrevNotes] = useState(notes);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<StickyNote | null>(null);
 
@@ -102,6 +111,12 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
   const [content, setContent] = useState('');
   const [selectedColor, setSelectedColor] = useState<StickyNoteColor>('yellow');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Sync internal state when prop changes without useEffect cascading render
+  if (notes !== prevNotes) {
+    setPrevNotes(notes);
+    setItems(notes);
+  }
 
   // Handle opening creation modal
   const handleOpenCreate = () => {
@@ -122,7 +137,10 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
   // Create new note
   const handleCreateNote = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || (!title.trim() && !content.trim())) {
+    const cleanTitle = autoCapitalizeSentences(title.trim());
+    const cleanContent = autoCapitalizeSentences(content.trim());
+
+    if (!user || (!cleanTitle && !cleanContent)) {
       toast.error('Please enter a note title or content.');
       return;
     }
@@ -130,9 +148,10 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
     setIsLoading(true);
     try {
       await createStickyNote(user.uid, {
-        title: title.trim() || 'Untitled Note',
-        content: content.trim(),
+        title: cleanTitle || 'Untitled Note',
+        content: cleanContent,
         color: selectedColor,
+        order: items.filter((n) => !n.isPinned).length,
       });
       toast.success('Sticky note added!');
       setIsCreateOpen(false);
@@ -150,11 +169,14 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
     e.preventDefault();
     if (!user || !editingNote) return;
 
+    const cleanTitle = autoCapitalizeSentences(title.trim());
+    const cleanContent = autoCapitalizeSentences(content.trim());
+
     setIsLoading(true);
     try {
       await updateStickyNote(user.uid, editingNote.id, {
-        title: title.trim() || 'Untitled Note',
-        content: content.trim(),
+        title: cleanTitle || 'Untitled Note',
+        content: cleanContent,
         color: selectedColor,
       });
       toast.success('Note updated!');
@@ -189,17 +211,141 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
     }
   };
 
-  // Delete note
-  const handleDeleteNote = async (noteId: string) => {
-    if (!user) return;
-    if (!confirm('Are you sure you want to delete this sticky note?')) return;
+  const [noteToDelete, setNoteToDelete] = useState<StickyNote | null>(null);
+  const [pendingDeleteNoteIds, setPendingDeleteNoteIds] = useState<Set<string>>(new Set());
+  const pendingNoteDeletesRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-    try {
-      await deleteStickyNote(user.uid, noteId);
-      toast.success('Note deleted.');
-    } catch {
-      toast.error('Failed to delete note.');
+  // Cleanup timers on unmount
+  useEffect(() => {
+    const activeTimers = pendingNoteDeletesRef.current;
+    return () => {
+      activeTimers.forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
+  const visibleItems = items.filter((n) => !pendingDeleteNoteIds.has(n.id));
+
+  // Delete note with confirmation and Undo grace period
+  const handleConfirmDeleteNote = () => {
+    if (!user || !noteToDelete) return;
+    const note = noteToDelete;
+    const noteId = note.id;
+    const noteTitle = note.title || 'Sticky note';
+
+    setNoteToDelete(null);
+
+    // Optimistically hide note
+    setPendingDeleteNoteIds((prev) => new Set(prev).add(noteId));
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        await deleteStickyNote(user.uid, noteId);
+      } catch {
+        toast.error(`Failed to delete "${noteTitle}".`);
+      } finally {
+        pendingNoteDeletesRef.current.delete(noteId);
+        setPendingDeleteNoteIds((prev) => {
+          const next = new Set(prev);
+          next.delete(noteId);
+          return next;
+        });
+      }
+    }, 5000);
+
+    pendingNoteDeletesRef.current.set(noteId, timeoutId);
+
+    showGraceUndoToast({
+      title: 'Sticky note deleted',
+      subtitle: noteTitle,
+      duration: 5000,
+      onUndo: () => {
+        const timer = pendingNoteDeletesRef.current.get(noteId);
+        if (timer) {
+          clearTimeout(timer);
+          pendingNoteDeletesRef.current.delete(noteId);
+        }
+        setPendingDeleteNoteIds((prev) => {
+          const next = new Set(prev);
+          next.delete(noteId);
+          return next;
+        });
+        toast.success(`Restored "${noteTitle}"`);
+      },
+    });
+  };
+
+  // ─── Drag and Drop Handlers for Reordering ───
+  const handleDragStart = (e: React.DragEvent, note: StickyNote) => {
+    if (note.isPinned) {
+      e.preventDefault();
+      return;
     }
+    setDraggedId(note.id);
+    e.dataTransfer.setData('text/plain', note.id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, note: StickyNote) => {
+    if (note.isPinned || !draggedId || draggedId === note.id) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDragEnter = (_e: React.DragEvent, note: StickyNote) => {
+    if (note.isPinned || !draggedId || draggedId === note.id) return;
+    setDragOverId(note.id);
+  };
+
+  const handleDragLeave = (_e: React.DragEvent, note: StickyNote) => {
+    if (dragOverId === note.id) {
+      setDragOverId(null);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetNote: StickyNote) => {
+    e.preventDefault();
+    setDragOverId(null);
+
+    if (!draggedId || draggedId === targetNote.id || targetNote.isPinned) {
+      setDraggedId(null);
+      return;
+    }
+
+    const pinnedNotes = items.filter((n) => n.isPinned);
+    const unpinnedNotes = items.filter((n) => !n.isPinned);
+
+    const fromIndex = unpinnedNotes.findIndex((n) => n.id === draggedId);
+    const toIndex = unpinnedNotes.findIndex((n) => n.id === targetNote.id);
+
+    if (fromIndex === -1 || toIndex === -1) {
+      setDraggedId(null);
+      return;
+    }
+
+    const newUnpinned = [...unpinnedNotes];
+    const [movedItem] = newUnpinned.splice(fromIndex, 1);
+    newUnpinned.splice(toIndex, 0, movedItem);
+
+    // Immediate optimistic local update
+    const reorderedList = [...pinnedNotes, ...newUnpinned];
+    setItems(reorderedList);
+    setDraggedId(null);
+
+    // Persist new sequence to Firestore
+    if (user) {
+      try {
+        const orderedIds = newUnpinned.map((n) => n.id);
+        await reorderStickyNotes(user.uid, orderedIds);
+      } catch {
+        toast.error('Failed to save new order.');
+        setItems(notes); // Revert on failure
+      }
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedId(null);
+    setDragOverId(null);
   };
 
   return (
@@ -212,7 +358,7 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
             Teacher's Sticky Notes & Quick Reminders
           </h3>
           <p className="text-xs text-muted-foreground">
-            Personal blackboard for lesson reminders, to-do items, and quick teaching notes.
+            Personal blackboard for reminders and teaching notes. Drag unpinned cards to reorder.
           </p>
         </div>
         <Button onClick={handleOpenCreate} size="sm" className="self-start sm:self-auto cursor-pointer shadow-xs">
@@ -222,7 +368,7 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
       </div>
 
       {/* ─── Notes Grid ─── */}
-      {notes.length === 0 ? (
+      {visibleItems.length === 0 ? (
         <Card className="border-dashed shadow-xs">
           <CardContent className="flex flex-col items-center justify-center py-10 text-center p-6">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 mb-3">
@@ -239,25 +385,52 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {notes.map((note) => {
+        <div className="grid gap-3.5 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
+          {visibleItems.map((note) => {
             const config = COLOR_CONFIGS[note.color] || COLOR_CONFIGS.yellow;
+            const isDraggable = !note.isPinned;
+            const isBeingDragged = draggedId === note.id;
+            const isDragTarget = dragOverId === note.id;
 
             return (
               <div
                 key={note.id}
-                className={`group relative flex flex-col justify-between rounded-xl border p-4 shadow-xs transition-all duration-200 hover:shadow-md ${config.bgClass}`}
+                draggable={isDraggable}
+                onDragStart={(e) => handleDragStart(e, note)}
+                onDragOver={(e) => handleDragOver(e, note)}
+                onDragEnter={(e) => handleDragEnter(e, note)}
+                onDragLeave={(e) => handleDragLeave(e, note)}
+                onDrop={(e) => handleDrop(e, note)}
+                onDragEnd={handleDragEnd}
+                className={`group relative flex flex-col justify-between rounded-xl border p-4 shadow-xs transition-all duration-200 select-none ${
+                  isDraggable
+                    ? 'cursor-grab active:cursor-grabbing hover:shadow-md'
+                    : 'cursor-default'
+                } ${
+                  isBeingDragged
+                    ? 'opacity-30 scale-95 border-dashed border-primary ring-2 ring-primary/40'
+                    : ''
+                } ${
+                  isDragTarget
+                    ? 'ring-2 ring-primary ring-offset-2 scale-[1.02] shadow-lg'
+                    : ''
+                } ${config.bgClass}`}
               >
                 {/* Note Header & Top Controls */}
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-1.5">
-                    <div>
-                      <h4 className="font-bold text-sm leading-snug line-clamp-2">
-                        {note.title}
-                      </h4>
-                      <span className="text-[10px] opacity-70 block mt-0.5">
-                        {formatDate(note.createdAt)}
-                      </span>
+                    <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                      {isDraggable && (
+                        <GripVertical className="h-4 w-4 opacity-30 group-hover:opacity-70 mt-0.5 shrink-0 transition-opacity" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-bold text-sm leading-snug line-clamp-2">
+                          {note.title}
+                        </h4>
+                        <span className="text-[10px] opacity-70 block mt-0.5">
+                          {formatDate(note.createdAt)}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Pin button */}
@@ -313,7 +486,7 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDeleteNote(note.id)}
+                      onClick={() => setNoteToDelete(note)}
                       className="cursor-pointer p-1 rounded-md hover:bg-destructive/20 text-destructive transition-colors"
                       title="Delete note"
                     >
@@ -500,6 +673,16 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDeleteDialog
+        open={Boolean(noteToDelete)}
+        onOpenChange={(open) => !open && setNoteToDelete(null)}
+        title="Delete Sticky Note?"
+        itemName={noteToDelete?.title}
+        confirmText="Delete Note"
+        onConfirm={handleConfirmDeleteNote}
+      />
     </div>
   );
 }

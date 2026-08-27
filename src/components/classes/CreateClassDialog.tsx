@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
+import { autoCapitalizeSentences } from '@/lib/utils';
 
 interface CreateClassDialogProps {
   open: boolean;
@@ -33,7 +34,8 @@ export function CreateClassDialog({ open, onOpenChange }: CreateClassDialogProps
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!user || !name.trim()) {
+    const cleanName = autoCapitalizeSentences(name.trim());
+    if (!user || !cleanName) {
       toast.error('Class name is required.');
       return;
     }
@@ -41,11 +43,11 @@ export function CreateClassDialog({ open, onOpenChange }: CreateClassDialogProps
     setIsLoading(true);
     try {
       await createClass(user.uid, {
-        name: name.trim(),
-        subject: subject.trim(),
-        description: description.trim(),
+        name: cleanName,
+        subject: autoCapitalizeSentences(subject.trim()),
+        description: autoCapitalizeSentences(description.trim()),
       });
-      toast.success(`Class "${name.trim()}" created!`);
+      toast.success(`Class "${cleanName}" created!`);
       setName('');
       setSubject('');
       setDescription('');

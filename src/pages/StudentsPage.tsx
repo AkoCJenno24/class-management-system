@@ -1,8 +1,7 @@
 /**
  * Students Page — Global roster management.
  * Displays student name, grade level, ID, and enrolled classes.
- */
-import { useState, useEffect } from 'react';
+ */import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { onStudentsChange, onClassesChange, deleteStudent } from '@/lib/firebase/firestore';
@@ -21,6 +20,8 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { CreateStudentDialog } from '@/components/students/CreateStudentDialog';
 import { EditStudentDialog } from '@/components/students/EditStudentDialog';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
+import { showGraceUndoToast } from '@/components/ui/grace-undo-toast';
 import { toast } from 'sonner';
 import {
   Plus,
@@ -42,46 +43,92 @@ export function StudentsPage() {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
+
+  // Grace Period & Undo registry
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
+  const pendingDeletesRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Cleanup on unmount
+  useEffect(() => {
+    const activeTimers = pendingDeletesRef.current;
+    return () => {
+      activeTimers.forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
 
   useEffect(() => {
     if (!user) return;
     const unsubStudents = onStudentsChange(user.uid, setStudents);
     const unsubClasses = onClassesChange(user.uid, setClasses);
+
     return () => {
       unsubStudents();
-      unsubClasses();
       unsubClasses();
     };
   }, [user]);
 
   const classMap = new Map<string, string>(classes.map((c) => [c.id, c.name]));
 
-  const filteredStudents = students.filter((s) => {
-    const term = search.toLowerCase().trim();
-    if (!term) return true;
-    return (
-      s.firstName.toLowerCase().includes(term) ||
-      s.lastName.toLowerCase().includes(term) ||
-      (s.gradeLevel && s.gradeLevel.toLowerCase().includes(term)) ||
-      (s.studentId && s.studentId.toLowerCase().includes(term))
-    );
-  });
+  const filteredStudents = students
+    .filter((s) => !pendingDeleteIds.has(s.id))
+    .filter((s) => {
+      const term = search.toLowerCase().trim();
+      if (!term) return true;
+      return (
+        s.firstName.toLowerCase().includes(term) ||
+        s.lastName.toLowerCase().includes(term) ||
+        (s.gradeLevel && s.gradeLevel.toLowerCase().includes(term)) ||
+        (s.studentId && s.studentId.toLowerCase().includes(term))
+      );
+    });
 
-  const handleDelete = async (student: Student) => {
-    if (!user) return;
-    if (
-      !confirm(
-        `Are you sure you want to delete student "${student.firstName} ${student.lastName}"? All grades and class assignments will also be deleted.`
-      )
-    )
-      return;
+  const handleConfirmDeleteStudent = () => {
+    if (!user || !studentToDelete) return;
+    const student = studentToDelete;
+    const studentId = student.id;
+    const studentName = `${student.firstName} ${student.lastName}`;
 
-    try {
-      await deleteStudent(user.uid, student.id);
-      toast.success('Student deleted.');
-    } catch {
-      toast.error('Failed to delete student.');
-    }
+    setStudentToDelete(null);
+
+    // Optimistically hide student
+    setPendingDeleteIds((prev) => new Set(prev).add(studentId));
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        await deleteStudent(user.uid, studentId);
+      } catch {
+        toast.error(`Failed to delete student "${studentName}".`);
+      } finally {
+        pendingDeletesRef.current.delete(studentId);
+        setPendingDeleteIds((prev) => {
+          const next = new Set(prev);
+          next.delete(studentId);
+          return next;
+        });
+      }
+    }, 5000);
+
+    pendingDeletesRef.current.set(studentId, timeoutId);
+
+    showGraceUndoToast({
+      title: 'Student deleted',
+      subtitle: `${studentName} (grades and records removed)`,
+      duration: 5000,
+      onUndo: () => {
+        const timer = pendingDeletesRef.current.get(studentId);
+        if (timer) {
+          clearTimeout(timer);
+          pendingDeletesRef.current.delete(studentId);
+        }
+        setPendingDeleteIds((prev) => {
+          const next = new Set(prev);
+          next.delete(studentId);
+          return next;
+        });
+        toast.success(`Restored student "${studentName}"`);
+      },
+    });
   };
 
   return (
@@ -222,7 +269,7 @@ export function StudentsPage() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive hover:bg-destructive/10 cursor-pointer"
-                          onClick={() => handleDelete(student)}
+                          onClick={() => setStudentToDelete(student)}
                           title="Delete student"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -244,6 +291,27 @@ export function StudentsPage() {
         student={editingStudent}
         open={Boolean(editingStudent)}
         onOpenChange={(open) => !open && setEditingStudent(null)}
+      />
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDeleteDialog
+        open={Boolean(studentToDelete)}
+        onOpenChange={(open) => !open && setStudentToDelete(null)}
+        title="Delete Student?"
+        itemName={studentToDelete ? `${studentToDelete.firstName} ${studentToDelete.lastName}` : ''}
+        description={
+          studentToDelete ? (
+            <>
+              Are you sure you want to delete student{' '}
+              <span className="font-semibold text-foreground">
+                "{studentToDelete.firstName} {studentToDelete.lastName}"
+              </span>
+              ? All associated grades and records will be removed. You will have a 5-second grace period with Undo.
+            </>
+          ) : undefined
+        }
+        confirmText="Delete Student"
+        onConfirm={handleConfirmDeleteStudent}
       />
     </div>
   );

@@ -28,6 +28,7 @@ import { toast } from 'sonner';
 import { Loader2, Settings2 } from 'lucide-react';
 import type { Student } from '@/types';
 import { DEFAULT_GRADE_LEVELS } from '@/types';
+import { capitalizeFirst } from '@/lib/utils';
 
 interface EditStudentDialogProps {
   student: Student | null;
@@ -59,7 +60,10 @@ export function EditStudentDialog({ student, open, onOpenChange }: EditStudentDi
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!user || !student || !firstName.trim() || !lastName.trim()) {
+    const cleanFirst = capitalizeFirst(firstName.trim());
+    const cleanLast = capitalizeFirst(lastName.trim());
+
+    if (!user || !student || !cleanFirst || !cleanLast) {
       toast.error('First and last name are required.');
       return;
     }
@@ -67,8 +71,8 @@ export function EditStudentDialog({ student, open, onOpenChange }: EditStudentDi
     setIsLoading(true);
     try {
       await updateStudent(user.uid, student.id, {
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        firstName: cleanFirst,
+        lastName: cleanLast,
         gradeLevel: gradeLevel.trim() || null,
         studentId: studentId.trim() || null,
       });

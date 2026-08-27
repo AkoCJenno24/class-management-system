@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
+import { showGraceUndoToast } from '@/components/ui/grace-undo-toast';
 import { toast } from 'sonner';
 import {
   Layers,
@@ -84,35 +86,73 @@ export function SettingsPage() {
     }
   };
 
-  // Handle removing a grade level
-  const handleRemoveGradeLevel = async (levelToRemove: string) => {
-    if (gradeLevels.length <= 1) {
-      toast.error('You must keep at least one grade level.');
-      return;
-    }
+  // Dialog states for deletion & reset
+  const [levelToDelete, setLevelToDelete] = useState<string | null>(null);
+  const [isResetLevelsOpen, setIsResetLevelsOpen] = useState(false);
 
-    const updated = gradeLevels.filter((gl) => gl !== levelToRemove);
+  // Handle removing a grade level with Undo
+  const handleConfirmRemoveGradeLevel = async () => {
+    if (!levelToDelete) return;
+    const level = levelToDelete;
+    setLevelToDelete(null);
+
+    const updated = gradeLevels.filter((gl) => gl !== level);
     setGradeLevels(updated);
 
     if (user) {
       try {
         await updateTeacherProfile(user.uid, { gradeLevels: updated });
-        toast.success(`Removed "${levelToRemove}".`);
       } catch {
         toast.error('Failed to update grade levels.');
+        return;
       }
     }
+
+    showGraceUndoToast({
+      title: 'Grade level removed',
+      subtitle: level,
+      duration: 5000,
+      onUndo: async () => {
+        const restored = [...updated, level];
+        setGradeLevels(restored);
+        if (user) {
+          try {
+            await updateTeacherProfile(user.uid, { gradeLevels: restored });
+            toast.success(`Restored "${level}"`);
+          } catch {
+            toast.error('Failed to restore grade level.');
+          }
+        }
+      },
+    });
   };
 
-  // Reset grade levels to system default
-  const handleResetDefaultGradeLevels = async () => {
-    if (!confirm('Reset grade level presets back to the default list?')) return;
+  // Reset grade levels to system default with Undo
+  const handleConfirmResetDefaults = async () => {
+    setIsResetLevelsOpen(false);
+    const previous = [...gradeLevels];
     setGradeLevels(DEFAULT_GRADE_LEVELS);
+
     if (user) {
       setIsSavingGrades(true);
       try {
         await updateTeacherProfile(user.uid, { gradeLevels: DEFAULT_GRADE_LEVELS });
-        toast.success('Grade levels reset to defaults.');
+        showGraceUndoToast({
+          title: 'Grade levels reset to defaults',
+          subtitle: `${DEFAULT_GRADE_LEVELS.length} default presets restored`,
+          duration: 5000,
+          onUndo: async () => {
+            setGradeLevels(previous);
+            if (user) {
+              try {
+                await updateTeacherProfile(user.uid, { gradeLevels: previous });
+                toast.success('Restored custom grade levels');
+              } catch {
+                toast.error('Failed to restore grade levels.');
+              }
+            }
+          },
+        });
       } catch {
         toast.error('Failed to reset grade levels.');
       } finally {
@@ -178,7 +218,7 @@ export function SettingsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleResetDefaultGradeLevels}
+              onClick={() => setIsResetLevelsOpen(true)}
               disabled={isSavingGrades}
               className="text-xs self-start sm:self-auto cursor-pointer"
             >
@@ -219,7 +259,13 @@ export function SettingsPage() {
                   <span>{level}</span>
                   <button
                     type="button"
-                    onClick={() => handleRemoveGradeLevel(level)}
+                    onClick={() => {
+                      if (gradeLevels.length <= 1) {
+                        toast.error('You must keep at least one grade level.');
+                        return;
+                      }
+                      setLevelToDelete(level);
+                    }}
                     className="ml-1 cursor-pointer rounded-full p-0.5 hover:bg-destructive/20 hover:text-destructive transition-colors"
                     title={`Remove ${level}`}
                   >
@@ -374,6 +420,37 @@ export function SettingsPage() {
           </form>
         </CardContent>
       </Card>
+
+      {/* Remove Grade Level Dialog */}
+      <ConfirmDeleteDialog
+        open={Boolean(levelToDelete)}
+        onOpenChange={(open) => !open && setLevelToDelete(null)}
+        title="Remove Grade Level Preset?"
+        itemName={levelToDelete || ''}
+        description={
+          levelToDelete ? (
+            <>
+              Are you sure you want to remove preset{' '}
+              <span className="font-semibold text-foreground">"{levelToDelete}"</span>? You will
+              have a 5-second grace period with Undo to restore it.
+            </>
+          ) : undefined
+        }
+        confirmText="Remove Preset"
+        onConfirm={handleConfirmRemoveGradeLevel}
+      />
+
+      {/* Reset Defaults Dialog */}
+      <ConfirmDeleteDialog
+        open={isResetLevelsOpen}
+        onOpenChange={setIsResetLevelsOpen}
+        icon="warning"
+        title="Restore Default Presets?"
+        description="Reset your grade level presets back to the standard system defaults? Any custom presets will be replaced, but you will have a 5-second grace period with Undo."
+        confirmText="Restore Defaults"
+        isLoading={isSavingGrades}
+        onConfirm={handleConfirmResetDefaults}
+      />
     </div>
   );
 }

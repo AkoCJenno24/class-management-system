@@ -5,6 +5,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { NotificationProvider } from '@/contexts/NotificationContext';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { AppLayout } from '@/components/layout/AppLayout';
 
@@ -24,39 +25,41 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <TooltipProvider>
-          <BrowserRouter>
-          <Routes>
-            {/* Public auth routes */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignUpPage />} />
+        <NotificationProvider>
+          <TooltipProvider>
+            <BrowserRouter>
+              <Routes>
+                {/* Public auth routes */}
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignUpPage />} />
 
-            {/* Onboarding route (must be authenticated, but NOT yet onboarded) */}
-            <Route element={<ProtectedRoute requireOnboarding={false} />}>
-              <Route path="/onboarding" element={<OnboardingPage />} />
-            </Route>
+                {/* Onboarding route (must be authenticated, but NOT yet onboarded) */}
+                <Route element={<ProtectedRoute requireOnboarding={false} />}>
+                  <Route path="/onboarding" element={<OnboardingPage />} />
+                </Route>
 
-            {/* Main protected application routes (must be authenticated AND onboarded) */}
-            <Route element={<ProtectedRoute requireOnboarding={true} />}>
-              <Route element={<AppLayout />}>
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/classes" element={<ClassesPage />} />
-                <Route path="/classes/:id" element={<ClassDetailPage />} />
-                <Route
-                  path="/classes/:classId/students/:studentId"
-                  element={<StudentClassDashboardPage />}
-                />
-                <Route path="/students" element={<StudentsPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-              </Route>
-            </Route>
+                {/* Main protected application routes (must be authenticated AND onboarded) */}
+                <Route element={<ProtectedRoute requireOnboarding={true} />}>
+                  <Route element={<AppLayout />}>
+                    <Route path="/" element={<DashboardPage />} />
+                    <Route path="/classes" element={<ClassesPage />} />
+                    <Route path="/classes/:id" element={<ClassDetailPage />} />
+                    <Route
+                      path="/classes/:classId/students/:studentId"
+                      element={<StudentClassDashboardPage />}
+                    />
+                    <Route path="/students" element={<StudentsPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                  </Route>
+                </Route>
 
-            {/* Catch-all redirect to dashboard */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
-        </TooltipProvider>
-        <Toaster position="top-right" richColors />
+                {/* Catch-all redirect to dashboard */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+          <Toaster position="top-right" richColors />
+        </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>
   );

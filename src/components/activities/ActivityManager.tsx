@@ -6,7 +6,7 @@
  * 3) Create / Edit / Delete activity definitions
  * 4) Activity stats overview
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { deleteActivity } from '@/lib/firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -23,6 +23,8 @@ import {
 } from '@/components/ui/table';
 import { CreateActivityDialog } from './CreateActivityDialog';
 import { EditActivityDialog } from './EditActivityDialog';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
+import { showGraceUndoToast } from '@/components/ui/grace-undo-toast';
 import { toast } from 'sonner';
 import {
   Plus,
@@ -78,15 +80,32 @@ export function ActivityManager({
   const [search, setSearch] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+  const [activityToDelete, setActivityToDelete] = useState<Activity | null>(null);
+
+  // Grace Period & Undo registry
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
+  const pendingDeletesRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    const activeTimers = pendingDeletesRef.current;
+    return () => {
+      activeTimers.forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
+  const visibleActivities = useMemo(() => {
+    return activities.filter((a) => !pendingDeleteIds.has(a.id));
+  }, [activities, pendingDeleteIds]);
 
   // Compute stats
   const stats = useMemo(() => {
-    const total = activities.length;
-    const totalMaxPoints = activities.reduce((sum, a) => sum + a.maxScore, 0);
-    const quizzes = activities.filter((a) => a.type === 'quiz').length;
-    const exams = activities.filter((a) => a.type === 'exam').length;
-    const assignments = activities.filter((a) => a.type === 'assignment' || a.type === 'homework').length;
-    const projects = activities.filter((a) => a.type === 'project').length;
+    const total = visibleActivities.length;
+    const totalMaxPoints = visibleActivities.reduce((sum, a) => sum + a.maxScore, 0);
+    const quizzes = visibleActivities.filter((a) => a.type === 'quiz').length;
+    const exams = visibleActivities.filter((a) => a.type === 'exam').length;
+    const assignments = visibleActivities.filter((a) => a.type === 'assignment' || a.type === 'homework').length;
+    const projects = visibleActivities.filter((a) => a.type === 'project').length;
 
     return {
       total,
@@ -96,29 +115,65 @@ export function ActivityManager({
       assignments,
       projects,
     };
-  }, [activities]);
+  }, [visibleActivities]);
 
   const filteredActivities = useMemo(() => {
-    if (!search.trim()) return activities;
+    if (!search.trim()) return visibleActivities;
     const term = search.toLowerCase();
-    return activities.filter(
+    return visibleActivities.filter(
       (a) =>
         a.name.toLowerCase().includes(term) ||
         a.type.toLowerCase().includes(term) ||
         (a.description && a.description.toLowerCase().includes(term))
     );
-  }, [activities, search]);
+  }, [visibleActivities, search]);
 
-  const handleDelete = async (activityId: string, name: string) => {
-    if (!user) return;
-    if (!confirm(`Are you sure you want to delete the activity "${name}"?`)) return;
+  const handleConfirmDeleteActivity = () => {
+    if (!user || !activityToDelete) return;
+    const activity = activityToDelete;
+    const activityId = activity.id;
+    const activityName = activity.name;
 
-    try {
-      await deleteActivity(user.uid, activityId);
-      toast.success(`Activity "${name}" deleted.`);
-    } catch {
-      toast.error('Failed to delete activity.');
-    }
+    setActivityToDelete(null);
+
+    // Optimistically hide activity
+    setPendingDeleteIds((prev) => new Set(prev).add(activityId));
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        await deleteActivity(user.uid, activityId);
+      } catch {
+        toast.error(`Failed to delete activity "${activityName}".`);
+      } finally {
+        pendingDeletesRef.current.delete(activityId);
+        setPendingDeleteIds((prev) => {
+          const next = new Set(prev);
+          next.delete(activityId);
+          return next;
+        });
+      }
+    }, 5000);
+
+    pendingDeletesRef.current.set(activityId, timeoutId);
+
+    showGraceUndoToast({
+      title: 'Activity deleted',
+      subtitle: activityName,
+      duration: 5000,
+      onUndo: () => {
+        const timer = pendingDeletesRef.current.get(activityId);
+        if (timer) {
+          clearTimeout(timer);
+          pendingDeletesRef.current.delete(activityId);
+        }
+        setPendingDeleteIds((prev) => {
+          const next = new Set(prev);
+          next.delete(activityId);
+          return next;
+        });
+        toast.success(`Restored activity "${activityName}"`);
+      },
+    });
   };
 
   return (
@@ -321,7 +376,7 @@ export function ActivityManager({
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-destructive hover:bg-destructive/10 cursor-pointer"
-                              onClick={() => handleDelete(activity.id, activity.name)}
+                              onClick={() => setActivityToDelete(activity)}
                               title="Delete activity"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -353,6 +408,26 @@ export function ActivityManager({
         onOpenChange={(open) => {
           if (!open) setEditingActivity(null);
         }}
+      />
+
+      {/* Confirm Delete Activity Dialog */}
+      <ConfirmDeleteDialog
+        open={Boolean(activityToDelete)}
+        onOpenChange={(open) => !open && setActivityToDelete(null)}
+        title="Delete Activity?"
+        itemName={activityToDelete?.name}
+        description={
+          activityToDelete ? (
+            <>
+              Are you sure you want to delete{' '}
+              <span className="font-semibold text-foreground">"{activityToDelete.name}"</span>? All
+              grades scored for this activity in <span className="font-semibold text-foreground">{className}</span> will
+              also be removed. You will have a 5-second grace period with Undo.
+            </>
+          ) : undefined
+        }
+        confirmText="Delete Activity"
+        onConfirm={handleConfirmDeleteActivity}
       />
     </div>
   );

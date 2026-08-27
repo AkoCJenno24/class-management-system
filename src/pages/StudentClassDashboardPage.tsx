@@ -6,7 +6,7 @@
  * 3) Chronological activity/quiz records table with score editing & deletion
  * 4) Quick "Record New Grade" action
  */
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -31,6 +31,8 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { AddGradeDialog } from '@/components/grades/AddGradeDialog';
 import { EditGradeDialog } from '@/components/grades/EditGradeDialog';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
+import { showGraceUndoToast } from '@/components/ui/grace-undo-toast';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -117,10 +119,24 @@ export function StudentClassDashboardPage() {
     [students, studentId]
   );
 
-  // Filter grades specifically for this student in this class
+  const [gradeToDelete, setGradeToDelete] = useState<Grade | null>(null);
+
+  // Grace Period & Undo registry
+  const [pendingDeleteGradeIds, setPendingDeleteGradeIds] = useState<Set<string>>(new Set());
+  const pendingDeletesRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    const activeTimers = pendingDeletesRef.current;
+    return () => {
+      activeTimers.forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
+  // Filter grades specifically for this student in this class (excluding pending deletion)
   const studentGrades = useMemo(
-    () => allClassGrades.filter((g) => g.studentId === studentId),
-    [allClassGrades, studentId]
+    () => allClassGrades.filter((g) => g.studentId === studentId && !pendingDeleteGradeIds.has(g.id)),
+    [allClassGrades, studentId, pendingDeleteGradeIds]
   );
 
   // Performance calculations
@@ -206,16 +222,52 @@ export function StudentClassDashboardPage() {
     };
   }, [studentId, allClassAttendance]);
 
-  const handleDeleteGrade = async (gradeId: string) => {
-    if (!user) return;
-    if (!confirm('Are you sure you want to delete this grade entry?')) return;
+  const handleConfirmDeleteGrade = () => {
+    if (!user || !gradeToDelete) return;
+    const grade = gradeToDelete;
+    const gradeId = grade.id;
+    const label = `${grade.assignmentName} (${grade.score}/${grade.maxScore})`;
 
-    try {
-      await deleteGrade(user.uid, gradeId);
-      toast.success('Grade entry deleted.');
-    } catch {
-      toast.error('Failed to delete grade.');
-    }
+    setGradeToDelete(null);
+
+    // Optimistically hide grade entry
+    setPendingDeleteGradeIds((prev) => new Set(prev).add(gradeId));
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        await deleteGrade(user.uid, gradeId);
+      } catch {
+        toast.error(`Failed to delete grade "${label}".`);
+      } finally {
+        pendingDeletesRef.current.delete(gradeId);
+        setPendingDeleteGradeIds((prev) => {
+          const next = new Set(prev);
+          next.delete(gradeId);
+          return next;
+        });
+      }
+    }, 5000);
+
+    pendingDeletesRef.current.set(gradeId, timeoutId);
+
+    showGraceUndoToast({
+      title: 'Grade entry deleted',
+      subtitle: label,
+      duration: 5000,
+      onUndo: () => {
+        const timer = pendingDeletesRef.current.get(gradeId);
+        if (timer) {
+          clearTimeout(timer);
+          pendingDeletesRef.current.delete(gradeId);
+        }
+        setPendingDeleteGradeIds((prev) => {
+          const next = new Set(prev);
+          next.delete(gradeId);
+          return next;
+        });
+        toast.success(`Restored grade for "${label}"`);
+      },
+    });
   };
 
   if (isLoading || !currentClass) {
@@ -564,7 +616,7 @@ export function StudentClassDashboardPage() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-destructive hover:bg-destructive/10 cursor-pointer"
-                              onClick={() => handleDeleteGrade(grade.id)}
+                              onClick={() => setGradeToDelete(grade)}
                               title="Delete grade"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -696,6 +748,28 @@ export function StudentClassDashboardPage() {
         onOpenChange={(open) => {
           if (!open) setEditingGrade(null);
         }}
+      />
+
+      {/* Confirm Delete Grade Dialog */}
+      <ConfirmDeleteDialog
+        open={Boolean(gradeToDelete)}
+        onOpenChange={(open) => !open && setGradeToDelete(null)}
+        title="Delete Grade Entry?"
+        itemName={gradeToDelete ? `${gradeToDelete.assignmentName} (${gradeToDelete.score}/${gradeToDelete.maxScore})` : ''}
+        description={
+          gradeToDelete ? (
+            <>
+              Are you sure you want to delete the score of{' '}
+              <span className="font-bold text-foreground">
+                {gradeToDelete.score} / {gradeToDelete.maxScore}
+              </span>{' '}
+              for <span className="font-semibold text-foreground">"{gradeToDelete.assignmentName}"</span>? You will
+              have a 5-second grace period with Undo to restore it.
+            </>
+          ) : undefined
+        }
+        confirmText="Delete Grade"
+        onConfirm={handleConfirmDeleteGrade}
       />
     </div>
   );

@@ -25,6 +25,7 @@ import {
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import type { ActivityType } from '@/types';
+import { autoCapitalizeSentences } from '@/lib/utils';
 
 interface CreateActivityDialogProps {
   open: boolean;
@@ -51,7 +52,8 @@ export function CreateActivityDialog({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!user || !name.trim()) {
+    const cleanName = autoCapitalizeSentences(name.trim());
+    if (!user || !cleanName) {
       toast.error('Activity name is required.');
       return;
     }
@@ -66,13 +68,13 @@ export function CreateActivityDialog({
     try {
       await createActivity(user.uid, {
         classId,
-        name: name.trim(),
+        name: cleanName,
         type,
         maxScore: numMax,
-        description: description.trim(),
+        description: autoCapitalizeSentences(description.trim()),
         dueDate: dueDate ? new Date(dueDate) : null,
       });
-      toast.success(`Activity "${name.trim()}" created!`);
+      toast.success(`Activity "${cleanName}" created!`);
       setName('');
       setType('quiz');
       setMaxScore(defaultMax.toString());

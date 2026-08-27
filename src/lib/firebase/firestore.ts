@@ -32,8 +32,14 @@ import type {
   AttendanceStatus,
   StickyNote,
   StickyNoteColor,
+  TodoItem,
+  TodoPriority,
+  TodoCategory,
   OnboardingData,
   GradingScale,
+  AppNotification,
+  NotificationType,
+  NotificationCategory,
 } from '@/types';
 import { DEFAULT_GRADING_SCALE, DEFAULT_GRADE_LEVELS } from '@/types';
 
@@ -725,6 +731,38 @@ export function onClassActivitiesChange(
   );
 }
 
+/** Subscribes to real-time changes on ALL activities across all classes for a user. */
+export function onAllActivitiesChange(
+  uid: string,
+  callback: (activities: Activity[]) => void
+): Unsubscribe {
+  const q = collection(db, 'users', uid, 'activities');
+  return onSnapshot(
+    q,
+    (snap) => {
+      const activities: Activity[] = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          classId: data.classId ?? '',
+          name: data.name ?? '',
+          type: data.type ?? 'quiz',
+          maxScore: data.maxScore ?? 100,
+          description: data.description ?? '',
+          dueDate: data.dueDate ? toDate(data.dueDate) : null,
+          createdAt: toDate(data.createdAt),
+          updatedAt: toDate(data.updatedAt),
+        };
+      });
+      activities.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      callback(activities);
+    },
+    (err) => {
+      console.error('Error in onAllActivitiesChange listener:', err);
+    }
+  );
+}
+
 // ─── Sticky Notes ───────────────────────────────────────────────────────────
 
 /** Creates a new sticky note on the teacher's dashboard. */
@@ -735,6 +773,7 @@ export async function createStickyNote(
     content: string;
     color: StickyNoteColor;
     isPinned?: boolean;
+    order?: number;
   }
 ): Promise<string> {
   const ref = await addDoc(collection(db, 'users', uid, 'notes'), {
@@ -742,6 +781,7 @@ export async function createStickyNote(
     content: data.content,
     color: data.color,
     isPinned: data.isPinned ?? false,
+    order: data.order ?? 0,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -752,7 +792,7 @@ export async function createStickyNote(
 export async function updateStickyNote(
   uid: string,
   noteId: string,
-  data: Partial<Pick<StickyNote, 'title' | 'content' | 'color' | 'isPinned'>>
+  data: Partial<Pick<StickyNote, 'title' | 'content' | 'color' | 'isPinned' | 'order'>>
 ): Promise<void> {
   const updatePayload: Record<string, unknown> = {
     updatedAt: serverTimestamp(),
@@ -761,8 +801,25 @@ export async function updateStickyNote(
   if (data.content !== undefined) updatePayload.content = data.content;
   if (data.color !== undefined) updatePayload.color = data.color;
   if (data.isPinned !== undefined) updatePayload.isPinned = data.isPinned;
+  if (data.order !== undefined) updatePayload.order = data.order;
 
   await updateDoc(doc(db, 'users', uid, 'notes', noteId), updatePayload);
+}
+
+/** Updates the sequence order of multiple sticky notes in a batch. */
+export async function reorderStickyNotes(
+  uid: string,
+  orderedNoteIds: string[]
+): Promise<void> {
+  if (orderedNoteIds.length === 0) return;
+  const batch = writeBatch(db);
+  orderedNoteIds.forEach((id, index) => {
+    batch.update(doc(db, 'users', uid, 'notes', id), {
+      order: index,
+      updatedAt: serverTimestamp(),
+    });
+  });
+  await batch.commit();
 }
 
 /** Deletes a sticky note. */
@@ -787,14 +844,20 @@ export function onStickyNotesChange(
           content: data.content ?? '',
           color: data.color ?? 'yellow',
           isPinned: data.isPinned ?? false,
+          order: typeof data.order === 'number' ? data.order : undefined,
           createdAt: toDate(data.createdAt),
           updatedAt: toDate(data.updatedAt),
         };
       });
-      // Pinned notes first, then newest notes
+      // Pinned notes first, then unpinned notes sorted by custom order or creation date
       notes.sort((a, b) => {
         if (a.isPinned && !b.isPinned) return -1;
         if (!a.isPinned && b.isPinned) return 1;
+        if (a.order !== undefined && b.order !== undefined) {
+          return a.order - b.order;
+        }
+        if (a.order !== undefined) return -1;
+        if (b.order !== undefined) return 1;
         return b.createdAt.getTime() - a.createdAt.getTime();
       });
       callback(notes);
@@ -804,4 +867,270 @@ export function onStickyNotesChange(
     }
   );
 }
+
+// ─── To-Do Items ───────────────────────────────────────────────────────────
+
+/** Creates a new task item on the teacher's to-do list. */
+export async function createTodoItem(
+  uid: string,
+  data: {
+    title: string;
+    description?: string;
+    priority?: TodoPriority;
+    category?: TodoCategory;
+    dueDate?: Date | null;
+    isPinned?: boolean;
+  }
+): Promise<string> {
+  const ref = await addDoc(collection(db, 'users', uid, 'todos'), {
+    title: data.title,
+    description: data.description ?? '',
+    completed: false,
+    priority: data.priority ?? 'medium',
+    category: data.category ?? 'general',
+    dueDate: data.dueDate ? data.dueDate : null,
+    isPinned: data.isPinned ?? false,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    completedAt: null,
+  });
+  return ref.id;
+}
+
+/** Updates an existing to-do item. */
+export async function updateTodoItem(
+  uid: string,
+  todoId: string,
+  data: Partial<
+    Pick<
+      TodoItem,
+      | 'title'
+      | 'description'
+      | 'completed'
+      | 'priority'
+      | 'category'
+      | 'dueDate'
+      | 'isPinned'
+      | 'completedAt'
+    >
+  >
+): Promise<void> {
+  const updatePayload: Record<string, unknown> = {
+    updatedAt: serverTimestamp(),
+  };
+
+  if (data.title !== undefined) updatePayload.title = data.title;
+  if (data.description !== undefined) updatePayload.description = data.description;
+  if (data.completed !== undefined) {
+    updatePayload.completed = data.completed;
+    updatePayload.completedAt = data.completed ? serverTimestamp() : null;
+  }
+  if (data.priority !== undefined) updatePayload.priority = data.priority;
+  if (data.category !== undefined) updatePayload.category = data.category;
+  if (data.dueDate !== undefined) updatePayload.dueDate = data.dueDate ? data.dueDate : null;
+  if (data.isPinned !== undefined) updatePayload.isPinned = data.isPinned;
+
+  await updateDoc(doc(db, 'users', uid, 'todos', todoId), updatePayload);
+}
+
+/** Toggles completion status of a to-do item. */
+export async function toggleTodoItem(
+  uid: string,
+  todoId: string,
+  completed: boolean
+): Promise<void> {
+  await updateDoc(doc(db, 'users', uid, 'todos', todoId), {
+    completed,
+    completedAt: completed ? serverTimestamp() : null,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Deletes a single to-do item. */
+export async function deleteTodoItem(uid: string, todoId: string): Promise<void> {
+  await deleteDoc(doc(db, 'users', uid, 'todos', todoId));
+}
+
+/** Batch deletes all completed to-do items for a teacher. */
+export async function clearCompletedTodos(uid: string): Promise<void> {
+  const q = query(
+    collection(db, 'users', uid, 'todos'),
+    where('completed', '==', true)
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return;
+
+  const batch = writeBatch(db);
+  for (const item of snap.docs) {
+    batch.delete(item.ref);
+  }
+  await batch.commit();
+}
+
+/** Subscribes to real-time changes on to-do list items for the teacher. */
+export function onTodoItemsChange(
+  uid: string,
+  callback: (todos: TodoItem[]) => void
+): Unsubscribe {
+  const q = query(collection(db, 'users', uid, 'todos'));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const items: TodoItem[] = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          title: data.title ?? '',
+          description: data.description ?? '',
+          completed: data.completed ?? false,
+          priority: (data.priority as TodoPriority) ?? 'medium',
+          category: (data.category as TodoCategory) ?? 'general',
+          dueDate: data.dueDate ? toDate(data.dueDate) : null,
+          isPinned: data.isPinned ?? false,
+          createdAt: toDate(data.createdAt),
+          updatedAt: toDate(data.updatedAt),
+          completedAt: data.completedAt ? toDate(data.completedAt) : null,
+        };
+      });
+
+      // Sort ordering:
+      // 1. Incomplete items before completed items
+      // 2. Pinned items first within each group
+      // 3. Due dates (closest first) or creation date (newest first)
+      items.sort((a, b) => {
+        if (a.completed !== b.completed) {
+          return a.completed ? 1 : -1;
+        }
+        if (a.isPinned !== b.isPinned) {
+          return a.isPinned ? -1 : 1;
+        }
+        if (a.dueDate && b.dueDate) {
+          return a.dueDate.getTime() - b.dueDate.getTime();
+        }
+        if (a.dueDate && !b.dueDate) return -1;
+        if (!a.dueDate && b.dueDate) return 1;
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      });
+
+      callback(items);
+    },
+    (err) => {
+      console.error('Error in onTodoItemsChange listener:', err);
+    }
+  );
+}
+
+// ─── Notifications ──────────────────────────────────────────────────────────
+
+/** Creates a new notification for a teacher. Returns the created notification ID. */
+export async function createNotification(
+  uid: string,
+  data: {
+    title: string;
+    message: string;
+    type?: NotificationType;
+    category?: NotificationCategory;
+    link?: string;
+    entityId?: string;
+    metadata?: Record<string, unknown>;
+  }
+): Promise<string> {
+  const ref = await addDoc(collection(db, 'users', uid, 'notifications'), {
+    title: data.title,
+    message: data.message,
+    type: data.type ?? 'info',
+    category: data.category ?? 'general',
+    link: data.link ?? null,
+    entityId: data.entityId ?? null,
+    metadata: data.metadata ?? {},
+    read: false,
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+/** Marks a specific notification as read. */
+export async function markNotificationAsRead(
+  uid: string,
+  notificationId: string
+): Promise<void> {
+  await updateDoc(doc(db, 'users', uid, 'notifications', notificationId), {
+    read: true,
+  });
+}
+
+/** Marks all unread notifications as read for a teacher. */
+export async function markAllNotificationsAsRead(uid: string): Promise<void> {
+  const q = query(
+    collection(db, 'users', uid, 'notifications'),
+    where('read', '==', false)
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return;
+
+  const batch = writeBatch(db);
+  for (const item of snap.docs) {
+    batch.update(item.ref, { read: true });
+  }
+  await batch.commit();
+}
+
+/** Deletes a single notification. */
+export async function deleteNotification(
+  uid: string,
+  notificationId: string
+): Promise<void> {
+  await deleteDoc(doc(db, 'users', uid, 'notifications', notificationId));
+}
+
+/** Clears all notifications for a teacher. */
+export async function clearAllNotifications(uid: string): Promise<void> {
+  const snap = await getDocs(collection(db, 'users', uid, 'notifications'));
+  if (snap.empty) return;
+
+  const batch = writeBatch(db);
+  for (const item of snap.docs) {
+    batch.delete(item.ref);
+  }
+  await batch.commit();
+}
+
+/** Subscribes to real-time changes on notifications for the teacher. */
+export function onNotificationsChange(
+  uid: string,
+  callback: (notifications: AppNotification[]) => void
+): Unsubscribe {
+  const q = query(collection(db, 'users', uid, 'notifications'));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const items: AppNotification[] = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          userId: uid,
+          title: data.title ?? '',
+          message: data.message ?? '',
+          type: (data.type as NotificationType) ?? 'info',
+          category: (data.category as NotificationCategory) ?? 'general',
+          link: data.link ?? undefined,
+          read: data.read ?? false,
+          entityId: data.entityId ?? undefined,
+          metadata: data.metadata ?? undefined,
+          createdAt: toDate(data.createdAt),
+        };
+      });
+
+      // Sort by creation date descending (newest first)
+      items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+      callback(items);
+    },
+    (err) => {
+      console.error('Error in onNotificationsChange listener:', err);
+    }
+  );
+}
+
+
 

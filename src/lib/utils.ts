@@ -87,3 +87,25 @@ export function getGradeColor(score: number, maxScore: number, _scale?: GradingS
   if (percentage >= 60) return '#F97316'; // Orange
   return '#EF4444'; // Red
 }
+
+/**
+ * Capitalizes the first letter of a string.
+ */
+export function capitalizeFirst(str: string | undefined | null): string {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/**
+ * Automatically capitalizes the first character of the text,
+ * as well as the first letter following sentence-ending punctuation (. ! ? or newline).
+ * Does not capitalize every word, preserving normal sentence casing.
+ */
+export function autoCapitalizeSentences(text: string): string {
+  if (!text) return text;
+
+  return text.replace(
+    /(^\s*|[.!?]\s+|\n\s*)([a-z\u00E0-\u00FC])/gu,
+    (_, prefix, letter) => `${prefix}${letter.toUpperCase()}`
+  );
+}

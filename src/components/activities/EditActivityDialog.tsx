@@ -25,6 +25,7 @@ import {
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import type { Activity, ActivityType } from '@/types';
+import { autoCapitalizeSentences } from '@/lib/utils';
 
 interface EditActivityDialogProps {
   activity: Activity | null;
@@ -63,7 +64,8 @@ export function EditActivityDialog({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!user || !activity || !name.trim()) {
+    const cleanName = autoCapitalizeSentences(name.trim());
+    if (!user || !activity || !cleanName) {
       toast.error('Activity name is required.');
       return;
     }
@@ -77,10 +79,10 @@ export function EditActivityDialog({
     setIsLoading(true);
     try {
       await updateActivity(user.uid, activity.id, {
-        name: name.trim(),
+        name: cleanName,
         type,
         maxScore: numMax,
-        description: description.trim(),
+        description: autoCapitalizeSentences(description.trim()),
         dueDate: dueDate ? new Date(dueDate) : null,
       });
       toast.success(`Activity "${name.trim()}" updated!`);

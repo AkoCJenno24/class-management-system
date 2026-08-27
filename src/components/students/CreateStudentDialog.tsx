@@ -30,6 +30,7 @@ import {
 import { toast } from 'sonner';
 import { Loader2, Settings2 } from 'lucide-react';
 import { DEFAULT_GRADE_LEVELS } from '@/types';
+import { capitalizeFirst } from '@/lib/utils';
 
 interface CreateStudentDialogProps {
   open: boolean;
@@ -51,7 +52,10 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!user || !firstName.trim() || !lastName.trim()) {
+    const cleanFirst = capitalizeFirst(firstName.trim());
+    const cleanLast = capitalizeFirst(lastName.trim());
+
+    if (!user || !cleanFirst || !cleanLast) {
       toast.error('First name and last name are required.');
       return;
     }
@@ -59,12 +63,12 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
     setIsLoading(true);
     try {
       await createStudent(user.uid, {
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        firstName: cleanFirst,
+        lastName: cleanLast,
         gradeLevel: gradeLevel.trim() || null,
         studentId: studentId.trim() || null,
       });
-      toast.success(`Student ${firstName.trim()} ${lastName.trim()} added!`);
+      toast.success(`Student ${cleanFirst} ${cleanLast} added!`);
       setFirstName('');
       setLastName('');
       setGradeLevel('');

@@ -9,11 +9,13 @@ import {
   onClassesChange,
   onStudentsChange,
   onStickyNotesChange,
+  onTodoItemsChange,
 } from '@/lib/firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StickyNotesBoard } from '@/components/dashboard/StickyNotesBoard';
-import type { Class, Student, StickyNote } from '@/types';
+import { TodoListBoard } from '@/components/dashboard/TodoListBoard';
+import type { Class, Student, StickyNote, TodoItem } from '@/types';
 import { BookOpen, Users, Plus, GraduationCap, School } from 'lucide-react';
 
 export function DashboardPage() {
@@ -21,6 +23,7 @@ export function DashboardPage() {
   const [classes, setClasses] = useState<Class[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [stickyNotes, setStickyNotes] = useState<StickyNote[]>([]);
+  const [todos, setTodos] = useState<TodoItem[]>([]);
 
   // Subscribe to real-time data
   useEffect(() => {
@@ -29,11 +32,13 @@ export function DashboardPage() {
     const unsubClasses = onClassesChange(user.uid, setClasses);
     const unsubStudents = onStudentsChange(user.uid, setStudents);
     const unsubNotes = onStickyNotesChange(user.uid, setStickyNotes);
+    const unsubTodos = onTodoItemsChange(user.uid, setTodos);
 
     return () => {
       unsubClasses();
       unsubStudents();
       unsubNotes();
+      unsubTodos();
     };
   }, [user]);
 
@@ -128,8 +133,18 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {/* ─── Teacher's Sticky Notes Board ─── */}
-      <StickyNotesBoard notes={stickyNotes} />
+      {/* ─── Productivity Hub: Sticky Notes (70% Left) & To-Do List (30% Right) ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-10 gap-6 items-start">
+        {/* Left: Sticky Notes (70% on lg screens) */}
+        <div className="lg:col-span-7 space-y-4">
+          <StickyNotesBoard notes={stickyNotes} />
+        </div>
+
+        {/* Right: To-Do List (30% on lg screens) */}
+        <div className="lg:col-span-3 space-y-4">
+          <TodoListBoard todos={todos} />
+        </div>
+      </div>
 
       {/* Empty state when no classes or students */}
       {totalClasses === 0 && totalStudents === 0 && (
