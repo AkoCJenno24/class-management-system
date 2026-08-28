@@ -51,6 +51,7 @@ import { formatStudentFullName } from '@/lib/utils';
 interface AttendanceMonitorProps {
   classId: string;
   students: Student[];
+  readOnly?: boolean;
 }
 
 /** Formats a Date object to YYYY-MM-DD string */
@@ -78,7 +79,7 @@ function formatDisplayDate(dateString: string): string {
   }
 }
 
-export function AttendanceMonitor({ classId, students }: AttendanceMonitorProps) {
+export function AttendanceMonitor({ classId, students, readOnly = false }: AttendanceMonitorProps) {
   const { user } = useAuth();
 
   const [selectedDate, setSelectedDate] = useState<string>(getTodayString());
@@ -107,35 +108,42 @@ export function AttendanceMonitor({ classId, students }: AttendanceMonitorProps)
       if (record) {
         setLocalStatuses(record.statuses || {});
       } else {
+        // Initialize default empty or absent
         setLocalStatuses({});
       }
     });
 
-    return unsub;
+    return () => unsub();
   }, [user, classId, selectedDate]);
 
-  // Subscribe to all historical attendance for overall rates
+  // Subscribe to all historical attendance records for stats
   useEffect(() => {
     if (!user || !classId) return;
-    const unsub = onClassAttendanceChange(user.uid, classId, setAllClassRecords);
-    return unsub;
+
+    const unsub = onClassAttendanceChange(user.uid, classId, (records) => {
+      setAllClassRecords(records);
+    });
+
+    return () => unsub();
   }, [user, classId]);
 
-  // Persist status changes silently to Firestore in background
+  // Save changes to Firestore
   const persistStatuses = useCallback(
     async (updated: Record<string, AttendanceStatus>) => {
-      if (!user) return;
+      if (!user || !classId || readOnly) return;
       try {
         await saveAttendanceRecord(user.uid, classId, selectedDate, updated);
-      } catch {
-        toast.error('Failed to save attendance.');
+      } catch (error) {
+        console.error('Failed to save attendance:', error);
+        toast.error('Failed to save attendance record.');
       }
     },
-    [user, classId, selectedDate]
+    [user, classId, selectedDate, readOnly]
   );
 
-  // Change status of a single student
+  // Set single student status
   const handleSetStudentStatus = (studentId: string, status: AttendanceStatus) => {
+    if (readOnly) return;
     const updated = {
       ...localStatuses,
       [studentId]: status,
@@ -146,33 +154,34 @@ export function AttendanceMonitor({ classId, students }: AttendanceMonitorProps)
 
   // Toggle present/absent for checklist
   const handleTogglePresent = (studentId: string) => {
+    if (readOnly) return;
     const current = localStatuses[studentId] || 'absent';
-    const next: AttendanceStatus = current === 'present' ? 'absent' : 'present';
-    handleSetStudentStatus(studentId, next);
+    const nextStatus: AttendanceStatus = current === 'present' ? 'absent' : 'present';
+    handleSetStudentStatus(studentId, nextStatus);
   };
 
-  // Bulk action: Mark All Present (Select All)
+  // Master Checklist Toggle: All Present
   const handleMarkAllPresent = () => {
-    const updated: Record<string, AttendanceStatus> = { ...localStatuses };
-    const targetStudents = filteredStudents.length > 0 ? filteredStudents : students;
-    targetStudents.forEach((s) => {
+    if (readOnly) return;
+    const updated: Record<string, AttendanceStatus> = {};
+    students.forEach((s) => {
       updated[s.id] = 'present';
     });
     setLocalStatuses(updated);
     persistStatuses(updated);
-    toast.success(`${targetStudents.length} students marked Present!`);
+    toast.success('Marked all students as Present.');
   };
 
-  // Bulk action: Mark All Absent
+  // Master Checklist Toggle: All Absent
   const handleMarkAllAbsent = () => {
-    const updated: Record<string, AttendanceStatus> = { ...localStatuses };
-    const targetStudents = filteredStudents.length > 0 ? filteredStudents : students;
-    targetStudents.forEach((s) => {
+    if (readOnly) return;
+    const updated: Record<string, AttendanceStatus> = {};
+    students.forEach((s) => {
       updated[s.id] = 'absent';
     });
     setLocalStatuses(updated);
     persistStatuses(updated);
-    toast.info(`${targetStudents.length} students marked Absent.`);
+    toast.info('Marked all students as Absent.');
   };
 
   // Date navigation helpers
@@ -301,27 +310,29 @@ export function AttendanceMonitor({ classId, students }: AttendanceMonitorProps)
               </Button>
             </div>
 
-            {/* Quick Bulk Actions */}
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                onClick={handleMarkAllPresent}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer"
-              >
-                <Check className="mr-1.5 h-4 w-4" />
-                Select All Present
-              </Button>
+            {/* Quick Bulk Actions (Active classes only) */}
+            {!readOnly && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={handleMarkAllPresent}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer"
+                >
+                  <Check className="mr-1.5 h-4 w-4" />
+                  Select All Present
+                </Button>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleMarkAllAbsent}
-                className="text-destructive hover:bg-destructive/10 cursor-pointer"
-              >
-                <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                Mark All Absent
-              </Button>
-            </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleMarkAllAbsent}
+                  className="text-destructive hover:bg-destructive/10 cursor-pointer"
+                >
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                  Mark All Absent
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Date Label */}
@@ -448,10 +459,15 @@ export function AttendanceMonitor({ classId, students }: AttendanceMonitorProps)
                   <TableHead className="w-12 text-center">
                     <button
                       type="button"
+                      disabled={readOnly}
                       onClick={summary.isAllPresent ? handleMarkAllAbsent : handleMarkAllPresent}
-                      className="cursor-pointer text-primary hover:opacity-80 flex items-center justify-center mx-auto"
+                      className={`flex items-center justify-center mx-auto ${
+                        readOnly ? 'cursor-default opacity-50' : 'cursor-pointer text-primary hover:opacity-80'
+                      }`}
                       title={
-                        summary.isAllPresent
+                        readOnly
+                          ? 'Attendance is read-only for archived classes'
+                          : summary.isAllPresent
                           ? 'Deselect All (Mark Absent)'
                           : 'Select All (Mark Present)'
                       }
@@ -497,9 +513,12 @@ export function AttendanceMonitor({ classId, students }: AttendanceMonitorProps)
                         <TableCell className="text-center">
                           <button
                             type="button"
+                            disabled={readOnly}
                             onClick={() => handleTogglePresent(student.id)}
-                            className="cursor-pointer flex items-center justify-center mx-auto p-1 rounded-md hover:bg-accent transition-colors"
-                            title={`Toggle ${student.firstName}'s status`}
+                            className={`flex items-center justify-center mx-auto p-1 rounded-md transition-colors ${
+                              readOnly ? 'cursor-default opacity-50' : 'cursor-pointer hover:bg-accent'
+                            }`}
+                            title={readOnly ? 'Read-only in archived class' : `Toggle ${student.firstName}'s status`}
                           >
                             {isPresent ? (
                               <CheckSquare className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
@@ -537,9 +556,12 @@ export function AttendanceMonitor({ classId, students }: AttendanceMonitorProps)
                             <Button
                               type="button"
                               size="sm"
+                              disabled={readOnly}
                               variant={status === 'present' ? 'default' : 'outline'}
                               onClick={() => handleSetStudentStatus(student.id, 'present')}
-                              className={`h-7 px-2.5 text-xs font-medium cursor-pointer ${
+                              className={`h-7 px-2.5 text-xs font-medium ${
+                                readOnly ? 'cursor-default opacity-60' : 'cursor-pointer'
+                              } ${
                                 status === 'present'
                                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                                   : 'text-muted-foreground hover:text-emerald-600'
@@ -550,9 +572,12 @@ export function AttendanceMonitor({ classId, students }: AttendanceMonitorProps)
                             <Button
                               type="button"
                               size="sm"
+                              disabled={readOnly}
                               variant={status === 'absent' ? 'default' : 'outline'}
                               onClick={() => handleSetStudentStatus(student.id, 'absent')}
-                              className={`h-7 px-2.5 text-xs font-medium cursor-pointer ${
+                              className={`h-7 px-2.5 text-xs font-medium ${
+                                readOnly ? 'cursor-default opacity-60' : 'cursor-pointer'
+                              } ${
                                 status === 'absent'
                                   ? 'bg-red-600 hover:bg-red-700 text-white'
                                   : 'text-muted-foreground hover:text-red-600'
@@ -563,9 +588,12 @@ export function AttendanceMonitor({ classId, students }: AttendanceMonitorProps)
                             <Button
                               type="button"
                               size="sm"
+                              disabled={readOnly}
                               variant={status === 'late' ? 'default' : 'outline'}
                               onClick={() => handleSetStudentStatus(student.id, 'late')}
-                              className={`h-7 px-2.5 text-xs font-medium cursor-pointer ${
+                              className={`h-7 px-2.5 text-xs font-medium ${
+                                readOnly ? 'cursor-default opacity-60' : 'cursor-pointer'
+                              } ${
                                 status === 'late'
                                   ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
                                   : 'text-muted-foreground hover:text-yellow-600'
@@ -576,9 +604,12 @@ export function AttendanceMonitor({ classId, students }: AttendanceMonitorProps)
                             <Button
                               type="button"
                               size="sm"
+                              disabled={readOnly}
                               variant={status === 'excused' ? 'default' : 'outline'}
                               onClick={() => handleSetStudentStatus(student.id, 'excused')}
-                              className={`h-7 px-2.5 text-xs font-medium cursor-pointer ${
+                              className={`h-7 px-2.5 text-xs font-medium ${
+                                readOnly ? 'cursor-default opacity-60' : 'cursor-pointer'
+                              } ${
                                 status === 'excused'
                                   ? 'bg-blue-600 hover:bg-blue-700 text-white'
                                   : 'text-muted-foreground hover:text-blue-600'

@@ -43,6 +43,7 @@ export default function App() {
                   <Route element={<AppLayout />}>
                     <Route path="/" element={<DashboardPage />} />
                     <Route path="/classes" element={<ClassesPage />} />
+                    <Route path="/classes/archived" element={<ClassesPage isArchivedView={true} />} />
                     <Route path="/classes/:id" element={<ClassDetailPage />} />
                     <Route
                       path="/classes/:classId/students/:studentId"

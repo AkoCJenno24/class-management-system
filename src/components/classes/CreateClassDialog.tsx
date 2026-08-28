@@ -18,9 +18,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScheduleDaysPicker } from './ScheduleDaysPicker';
+import { TimePicker12Hour } from './TimePicker12Hour';
+import { AcademicYearInput } from './AcademicYearInput';
 import { ClassColorPicker } from './ClassColorPicker';
 import { toast } from 'sonner';
-import { Loader2, DoorOpen, Clock } from 'lucide-react';
+import { Loader2, DoorOpen, Clock, GraduationCap } from 'lucide-react';
 import type { ClassColor } from '@/types';
 import { autoCapitalizeSentences } from '@/lib/utils';
 
@@ -33,6 +35,7 @@ export function CreateClassDialog({ open, onOpenChange }: CreateClassDialogProps
   const { user } = useAuth();
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('');
+  const [academicYear, setAcademicYear] = useState('');
   const [room, setRoom] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
@@ -63,6 +66,7 @@ export function CreateClassDialog({ open, onOpenChange }: CreateClassDialogProps
   const handleReset = () => {
     setName('');
     setSubject('');
+    setAcademicYear('');
     setRoom('');
     setStartTime('');
     setEndTime('');
@@ -90,6 +94,7 @@ export function CreateClassDialog({ open, onOpenChange }: CreateClassDialogProps
       await createClass(user.uid, {
         name: cleanName,
         subject: autoCapitalizeSentences(subject.trim()),
+        academicYear: academicYear.trim(),
         room: room.trim(),
         startTime: startTime.trim(),
         endTime: endTime.trim(),
@@ -177,6 +182,20 @@ export function CreateClassDialog({ open, onOpenChange }: CreateClassDialogProps
             </div>
           </div>
 
+          {/* Academic Year (From Year - To Year) */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium flex items-center gap-1">
+              <GraduationCap className="h-3.5 w-3.5 text-primary" />
+              <span>Academic Year</span>
+              <span className="text-[10px] text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            <AcademicYearInput
+              value={academicYear}
+              onChange={setAcademicYear}
+              disabled={isLoading}
+            />
+          </div>
+
           {/* Schedule Time Pickers (Start Time & End Time) */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
@@ -199,18 +218,16 @@ export function CreateClassDialog({ open, onOpenChange }: CreateClassDialogProps
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3 items-center">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
               <div className="space-y-1">
                 <Label htmlFor="class-start-time" className="text-[11px] text-muted-foreground">
                   Start Time
                 </Label>
-                <Input
+                <TimePicker12Hour
                   id="class-start-time"
-                  type="time"
                   value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
+                  onChange={setStartTime}
                   disabled={isLoading}
-                  className="text-xs cursor-pointer"
                 />
               </div>
 
@@ -218,13 +235,11 @@ export function CreateClassDialog({ open, onOpenChange }: CreateClassDialogProps
                 <Label htmlFor="class-end-time" className="text-[11px] text-muted-foreground">
                   End Time
                 </Label>
-                <Input
+                <TimePicker12Hour
                   id="class-end-time"
-                  type="time"
                   value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
+                  onChange={setEndTime}
                   disabled={isLoading}
-                  className="text-xs cursor-pointer"
                 />
               </div>
             </div>

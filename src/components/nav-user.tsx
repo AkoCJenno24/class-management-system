@@ -77,19 +77,27 @@ export function NavUser() {
               />
             }
           >
-            <div
-              className="h-8 w-8 rounded-lg overflow-hidden shrink-0 flex items-center justify-center select-none shadow-2xs ring-1 ring-border/40"
-              style={{ backgroundColor: showImage ? 'transparent' : resolved.bgColor }}
-            >
+            <div className="relative h-8 w-8 rounded-lg overflow-hidden shrink-0 bg-transparent select-none shadow-2xs ring-1 ring-border/40 isolate">
               {showImage && resolved.src ? (
                 <img
                   src={resolved.src}
                   alt={name}
                   onError={() => setImageError(true)}
-                  className="h-full w-full object-cover"
+                  className="absolute inset-0 z-10 block h-full w-full object-cover"
+                  style={{
+                    backgroundColor: 'transparent',
+                    opacity: 1,
+                    filter: 'none',
+                    mixBlendMode: 'normal',
+                  }}
                 />
               ) : (
-                <span className="text-xs font-bold text-white leading-none">{resolved.initials}</span>
+                <div
+                  className="absolute inset-0 z-10 flex items-center justify-center"
+                  style={{ backgroundColor: resolved.bgColor }}
+                >
+                  <span className="text-xs font-bold text-white leading-none">{resolved.initials}</span>
+                </div>
               )}
             </div>
             <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
@@ -107,19 +115,27 @@ export function NavUser() {
             <DropdownMenuGroup>
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-center gap-3 px-2 py-2 text-left text-sm">
-                  <div
-                    className="h-9 w-9 rounded-lg overflow-hidden shrink-0 flex items-center justify-center select-none shadow-2xs ring-1 ring-border/40"
-                    style={{ backgroundColor: showImage ? 'transparent' : resolved.bgColor }}
-                  >
+                  <div className="relative h-9 w-9 rounded-lg overflow-hidden shrink-0 bg-transparent select-none shadow-2xs ring-1 ring-border/40 isolate">
                     {showImage && resolved.src ? (
                       <img
                         src={resolved.src}
                         alt={name}
                         onError={() => setImageError(true)}
-                        className="h-full w-full object-cover"
+                        className="absolute inset-0 z-10 block h-full w-full object-cover"
+                        style={{
+                          backgroundColor: 'transparent',
+                          opacity: 1,
+                          filter: 'none',
+                          mixBlendMode: 'normal',
+                        }}
                       />
                     ) : (
-                      <span className="text-xs font-bold text-white leading-none">{resolved.initials}</span>
+                      <div
+                        className="absolute inset-0 z-10 flex items-center justify-center"
+                        style={{ backgroundColor: resolved.bgColor }}
+                      >
+                        <span className="text-xs font-bold text-white leading-none">{resolved.initials}</span>
+                      </div>
                     )}
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight min-w-0">

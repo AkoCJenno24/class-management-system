@@ -28,11 +28,13 @@ export function NavProjects({ onOpenCreateClass }: NavProjectsProps) {
     return () => unsubscribe()
   }, [user])
 
-  if (classes.length === 0) {
+  const activeClasses = classes.filter((c) => c.status !== 'archived')
+
+  if (activeClasses.length === 0) {
     return null
   }
 
-  const topClasses = classes.slice(0, 5)
+  const topClasses = activeClasses.slice(0, 5)
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
@@ -67,14 +69,14 @@ export function NavProjects({ onOpenCreateClass }: NavProjectsProps) {
           )
         })}
 
-        {classes.length > 5 && (
+        {activeClasses.length > 5 && (
           <SidebarMenuItem>
             <SidebarMenuButton
               render={<Link to="/classes" />}
               className="text-xs text-muted-foreground hover:text-foreground"
             >
               <ArrowRight className="size-3.5" />
-              <span>View all {classes.length} classes</span>
+              <span>View all {activeClasses.length} active classes</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         )}

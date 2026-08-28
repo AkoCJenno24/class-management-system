@@ -47,6 +47,7 @@ interface ActivityManagerProps {
   activities: Activity[];
   grades: Grade[];
   onRecordGradeForActivity?: (activity: Activity) => void;
+  readOnly?: boolean;
 }
 
 /** Formats activity type badge colors and labels */
@@ -75,6 +76,7 @@ export function ActivityManager({
   activities,
   grades,
   onRecordGradeForActivity,
+  readOnly = false,
 }: ActivityManagerProps) {
   const { user } = useAuth();
   const [search, setSearch] = useState('');
@@ -82,7 +84,7 @@ export function ActivityManager({
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [activityToDelete, setActivityToDelete] = useState<Activity | null>(null);
 
-  // Grace Period & Undo registry
+  // Grace Period registry for soft delete undo
   const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
   const pendingDeletesRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -94,42 +96,29 @@ export function ActivityManager({
     };
   }, []);
 
-  const visibleActivities = useMemo(() => {
-    return activities.filter((a) => !pendingDeleteIds.has(a.id));
-  }, [activities, pendingDeleteIds]);
-
-  // Compute stats
   const stats = useMemo(() => {
-    const total = visibleActivities.length;
-    const totalMaxPoints = visibleActivities.reduce((sum, a) => sum + a.maxScore, 0);
-    const quizzes = visibleActivities.filter((a) => a.type === 'quiz').length;
-    const exams = visibleActivities.filter((a) => a.type === 'exam').length;
-    const assignments = visibleActivities.filter((a) => a.type === 'assignment' || a.type === 'homework').length;
-    const projects = visibleActivities.filter((a) => a.type === 'project').length;
+    const total = activities.length;
+    const totalMaxPoints = activities.reduce((acc, a) => acc + (a.maxScore || 0), 0);
+    const quizzes = activities.filter((a) => a.type === 'quiz').length;
+    const exams = activities.filter((a) => a.type === 'exam').length;
+    const assignments = activities.filter((a) => a.type === 'assignment').length;
+    const projects = activities.filter((a) => a.type === 'project').length;
+    return { total, totalMaxPoints, quizzes, exams, assignments, projects };
+  }, [activities]);
 
-    return {
-      total,
-      totalMaxPoints,
-      quizzes,
-      exams,
-      assignments,
-      projects,
-    };
-  }, [visibleActivities]);
-
-  const filteredActivities = useMemo(() => {
-    if (!search.trim()) return visibleActivities;
-    const term = search.toLowerCase();
-    return visibleActivities.filter(
-      (a) =>
-        a.name.toLowerCase().includes(term) ||
-        a.type.toLowerCase().includes(term) ||
-        (a.description && a.description.toLowerCase().includes(term))
-    );
-  }, [visibleActivities, search]);
+  const filteredActivities = activities
+    .filter((a) => !pendingDeleteIds.has(a.id))
+    .filter((a) => {
+      const q = search.toLowerCase();
+      return (
+        a.name.toLowerCase().includes(q) ||
+        (a.description && a.description.toLowerCase().includes(q)) ||
+        a.type.toLowerCase().includes(q)
+      );
+    });
 
   const handleConfirmDeleteActivity = () => {
-    if (!user || !activityToDelete) return;
+    if (!user || !activityToDelete || readOnly) return;
     const activity = activityToDelete;
     const activityId = activity.id;
     const activityName = activity.name;
@@ -183,13 +172,17 @@ export function ActivityManager({
         <div>
           <h2 className="text-xl font-bold tracking-tight">Class Activities & Scoring</h2>
           <p className="text-sm text-muted-foreground">
-            Configure quizzes, exams, and assignments with customized maximum point scoring.
+            {readOnly
+              ? 'Archived record of all quizzes, exams, assignments, and scoring configurations (Read-Only).'
+              : 'Configure quizzes, exams, and assignments with customized maximum point scoring.'}
           </p>
         </div>
-        <Button onClick={() => setIsCreateOpen(true)} className="shadow-xs self-start sm:self-auto cursor-pointer">
-          <Plus className="mr-2 h-4 w-4" />
-          Create Activity
-        </Button>
+        {!readOnly && (
+          <Button onClick={() => setIsCreateOpen(true)} className="shadow-xs self-start sm:self-auto cursor-pointer">
+            <Plus className="mr-2 h-4 w-4" />
+            Create Activity
+          </Button>
+        )}
       </div>
 
       {/* ─── 2. Metrics Analytics Cards ─── */}
@@ -286,7 +279,7 @@ export function ActivityManager({
                   ? 'Define quizzes, homework, or exam rules with target max scores for this class.'
                   : 'Try searching with a different keyword.'}
               </p>
-              {activities.length === 0 && (
+              {activities.length === 0 && !readOnly && (
                 <Button onClick={() => setIsCreateOpen(true)} className="cursor-pointer">
                   <Plus className="mr-2 h-4 w-4" />
                   Create First Activity
@@ -303,7 +296,7 @@ export function ActivityManager({
                     <TableHead className="text-center">Max Score / Points</TableHead>
                     <TableHead>Due / Target Date</TableHead>
                     <TableHead className="text-center">Graded Entries</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    {!readOnly && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -349,41 +342,43 @@ export function ActivityManager({
                             {entriesCount === 1 ? 'student' : 'students'}
                           </span>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {onRecordGradeForActivity && (
+                        {!readOnly && (
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {onRecordGradeForActivity && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs font-medium cursor-pointer"
+                                  onClick={() => onRecordGradeForActivity(activity)}
+                                >
+                                  <CheckCircle2 className="mr-1 h-3.5 w-3.5 text-primary" />
+                                  Record Grade
+                                </Button>
+                              )}
                               <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 text-xs font-medium cursor-pointer"
-                                onClick={() => onRecordGradeForActivity(activity)}
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
+                                onClick={() => setEditingActivity(activity)}
+                                title="Edit activity"
                               >
-                                <CheckCircle2 className="mr-1 h-3.5 w-3.5 text-primary" />
-                                Record Grade
+                                <Pencil className="h-3.5 w-3.5" />
+                                <span className="sr-only">Edit</span>
                               </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
-                              onClick={() => setEditingActivity(activity)}
-                              title="Edit activity"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                              <span className="sr-only">Edit</span>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:bg-destructive/10 cursor-pointer"
-                              onClick={() => setActivityToDelete(activity)}
-                              title="Delete activity"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              <span className="sr-only">Delete</span>
-                            </Button>
-                          </div>
-                        </TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:bg-destructive/10 cursor-pointer"
+                                onClick={() => setActivityToDelete(activity)}
+                                title="Delete activity"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span className="sr-only">Delete</span>
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })}

@@ -387,47 +387,60 @@ export function SettingsPage() {
           <form onSubmit={handleSaveProfile} className="space-y-6">
             {/* Avatar preview and customization */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-5 rounded-2xl border border-border/80 bg-gradient-to-r from-muted/30 via-muted/20 to-background shadow-xs">
-              {/* Avatar with Camera Badge */}
+              {/* Avatar with isolated image / initials layers */}
               <div className="relative group shrink-0">
-                <div
+                <button
+                  type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="relative cursor-pointer rounded-full p-1 ring-2 ring-primary/25 hover:ring-primary/60 transition-all duration-200"
+                  disabled={isUploadingAvatar}
+                  className="relative block rounded-full p-1 ring-2 ring-primary/25 hover:ring-primary/60 transition-all duration-200 cursor-pointer disabled:cursor-wait"
                   title="Click to upload custom photo avatar"
+                  aria-label="Change teacher avatar"
                 >
-                  <div
-                    className="h-20 w-20 rounded-full shadow-md overflow-hidden flex items-center justify-center select-none ring-1 ring-border/40"
-                    style={{
-                      backgroundColor: showImage ? 'transparent' : resolvedAvatar.bgColor,
-                    }}
-                  >
+                  <div className="relative h-20 w-20 rounded-full overflow-hidden bg-transparent shadow-md ring-1 ring-border/40 isolate">
                     {showImage && resolvedAvatar.src ? (
-                      <img src={resolvedAvatar.src} alt="Avatar" className="object-cover h-full w-full rounded-full" />
+                      <img
+                        src={resolvedAvatar.src}
+                        alt="Avatar"
+                        className="absolute inset-0 z-10 block h-full w-full rounded-full object-cover"
+                        style={{
+                          backgroundColor: 'transparent',
+                          opacity: 1,
+                          filter: 'none',
+                          mixBlendMode: 'normal',
+                        }}
+                      />
                     ) : (
-                      <span className="text-xl font-bold text-white select-none">
-                        {resolvedAvatar.initials}
-                      </span>
+                      <div
+                        className="absolute inset-0 z-10 flex items-center justify-center rounded-full"
+                        style={{ backgroundColor: resolvedAvatar.bgColor }}
+                      >
+                        <span className="text-xl font-bold text-white select-none">
+                          {resolvedAvatar.initials}
+                        </span>
+                      </div>
                     )}
-                  </div>
 
-                  {/* Hover dark overlay with camera */}
-                  <div className="absolute inset-1 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white transition-opacity duration-200 backdrop-blur-[1px]">
-                    {isUploadingAvatar ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      <>
-                        <Camera className="h-5 w-5 mb-0.5" />
-                        <span className="text-[9px] font-semibold uppercase tracking-wider">Change</span>
-                      </>
-                    )}
+                    {/* Hover overlay is isolated above the avatar and never supplies avatar color. */}
+                    <div className="pointer-events-none absolute inset-0 z-20 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white transition-opacity duration-200">
+                      {isUploadingAvatar ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <>
+                          <Camera className="h-5 w-5 mb-0.5" />
+                          <span className="text-[9px] font-semibold uppercase tracking-wider">Change</span>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </button>
 
                 {/* Floating Camera Badge Button */}
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploadingAvatar}
-                  className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md hover:bg-primary/90 hover:scale-110 active:scale-95 transition-all ring-2 ring-background cursor-pointer"
+                  className="absolute -bottom-1 -right-1 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md hover:bg-primary/90 hover:scale-110 active:scale-95 transition-all ring-2 ring-background cursor-pointer"
                   title="Upload photo"
                   aria-label="Upload photo avatar"
                 >
@@ -495,11 +508,10 @@ export function SettingsPage() {
                         setAvatarUrl(null);
                         setAvatarPreset(null);
                       }}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border cursor-pointer transition-all ${
-                        avatarPreset === null && !avatarUrl
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border cursor-pointer transition-all ${avatarPreset === null && !avatarUrl
                           ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
                           : 'bg-card text-foreground hover:bg-accent border-border'
-                      }`}
+                        }`}
                     >
                       Initials Avatar
                     </button>
@@ -511,11 +523,10 @@ export function SettingsPage() {
                           setAvatarUrl(null);
                           setAvatarPreset(preset.id);
                         }}
-                        className={`relative p-1 rounded-lg border transition-all cursor-pointer ${
-                          avatarPreset === preset.id && !avatarUrl
+                        className={`relative p-1 rounded-lg border transition-all cursor-pointer ${avatarPreset === preset.id && !avatarUrl
                             ? 'border-primary ring-2 ring-primary/40 bg-accent scale-105 shadow-xs'
                             : 'border-border bg-card hover:bg-accent'
-                        }`}
+                          }`}
                         title={preset.label}
                       >
                         <img src={preset.src} alt={preset.label} className="h-6 w-6 rounded-md object-cover" />
@@ -533,9 +544,8 @@ export function SettingsPage() {
                             key={c}
                             type="button"
                             onClick={() => setAvatarColor(c)}
-                            className={`h-5 w-5 rounded-full cursor-pointer transition-all ${
-                              avatarColor === c ? 'ring-2 ring-primary ring-offset-1 scale-110' : 'opacity-80 hover:opacity-100'
-                            }`}
+                            className={`h-5 w-5 rounded-full cursor-pointer transition-all ${avatarColor === c ? 'ring-2 ring-primary ring-offset-1 scale-110' : 'opacity-80 hover:opacity-100'
+                              }`}
                             style={{ backgroundColor: c }}
                             title={c}
                           />

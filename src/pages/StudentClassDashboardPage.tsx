@@ -57,6 +57,7 @@ import {
   UserCheck,
   MapPin,
   User,
+  Archive,
 } from 'lucide-react';
 import type { Class, Student, Grade, AttendanceRecord, AttendanceStatus, Activity } from '@/types';
 import { DEFAULT_GRADING_SCALE } from '@/types';
@@ -306,12 +307,24 @@ export function StudentClassDashboardPage() {
     );
   }
 
-  return (
-    <div className="space-y-6">
+  return (    <div className="space-y-6">
+      {/* Archived Notice Banner */}
+      {currentClass.status === 'archived' && (
+        <div className="flex items-center gap-2.5 p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200 text-xs sm:text-sm font-medium shadow-2xs">
+          <Archive className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span>
+            This student performance record belongs to an archived class workspace (Read-Only).
+          </span>
+        </div>
+      )}
+
       {/* Navigation Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Link to="/classes" className="hover:text-foreground transition-colors">
-          Classes
+        <Link
+          to={currentClass.status === 'archived' ? '/classes/archived' : '/classes'}
+          className="hover:text-foreground transition-colors"
+        >
+          {currentClass.status === 'archived' ? 'Archive Classes' : 'Classes'}
         </Link>
         <span>/</span>
         <Link to={`/classes/${classId}`} className="hover:text-foreground transition-colors">
@@ -372,10 +385,10 @@ export function StudentClassDashboardPage() {
                     : ''}
                 </p>
 
-                {/* Extended Details Chips */}
-                <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1.5 pt-1 text-xs text-muted-foreground">
+                {/* Contact & Bio Info Chips */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground pt-1">
                   {currentStudent?.gender && (
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1 capitalize">
                       <User className="h-3 w-3 text-primary/70 shrink-0" />
                       {currentStudent.gender}
                     </span>
@@ -429,10 +442,12 @@ export function StudentClassDashboardPage() {
                 <Pencil className="mr-1.5 h-3.5 w-3.5" />
                 Edit Profile
               </Button>
-              <Button onClick={() => setIsAddGradeOpen(true)} className="shadow-xs cursor-pointer flex-1 sm:flex-initial text-xs sm:text-sm">
-                <Plus className="mr-1.5 h-4 w-4" />
-                Record Grade
-              </Button>
+              {currentClass.status !== 'archived' && (
+                <Button onClick={() => setIsAddGradeOpen(true)} className="shadow-xs cursor-pointer flex-1 sm:flex-initial text-xs sm:text-sm">
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  Record Grade
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
@@ -609,12 +624,16 @@ export function StudentClassDashboardPage() {
               <Calendar className="h-10 w-10 text-muted-foreground mb-3" />
               <h4 className="font-semibold text-base">No activity grades recorded yet</h4>
               <p className="text-sm text-muted-foreground max-w-sm mt-1 mb-4">
-                Record quiz scores, homework assignments, or exam results for this student.
+                {currentClass.status === 'archived'
+                  ? 'No grades were recorded for this student in this archived class.'
+                  : 'Record quiz scores, homework assignments, or exam results for this student.'}
               </p>
-              <Button onClick={() => setIsAddGradeOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Record First Grade
-              </Button>
+              {currentClass.status !== 'archived' && (
+                <Button onClick={() => setIsAddGradeOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Record First Grade
+                </Button>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-border">
@@ -626,7 +645,7 @@ export function StudentClassDashboardPage() {
                     <TableHead>Raw Score</TableHead>
                     <TableHead>Score Percentage</TableHead>
                     <TableHead>Grade Display</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    {currentClass.status !== 'archived' && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -675,30 +694,32 @@ export function StudentClassDashboardPage() {
                             {displayGrade}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
-                              onClick={() => setEditingGrade(grade)}
-                              title="Edit grade"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                              <span className="sr-only">Edit</span>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:bg-destructive/10 cursor-pointer"
-                              onClick={() => setGradeToDelete(grade)}
-                              title="Delete grade"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              <span className="sr-only">Delete</span>
-                            </Button>
-                          </div>
-                        </TableCell>
+                        {currentClass.status !== 'archived' && (
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
+                                onClick={() => setEditingGrade(grade)}
+                                title="Edit grade"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                <span className="sr-only">Edit</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:bg-destructive/10 cursor-pointer"
+                                onClick={() => setGradeToDelete(grade)}
+                                title="Delete grade"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                <span className="sr-only">Delete</span>
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })}

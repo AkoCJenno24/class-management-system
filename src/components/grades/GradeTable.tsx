@@ -42,9 +42,10 @@ interface GradeTableProps {
   grades: Grade[];
   students: Student[];
   classId?: string;
+  readOnly?: boolean;
 }
 
-export function GradeTable({ grades, students, classId }: GradeTableProps) {
+export function GradeTable({ grades, students, classId, readOnly = false }: GradeTableProps) {
   const { user, teacherProfile } = useAuth();
   const [selectedStudentFilter, setSelectedStudentFilter] = useState<string>('all');
   const [editingGrade, setEditingGrade] = useState<Grade | null>(null);
@@ -376,7 +377,7 @@ export function GradeTable({ grades, students, classId }: GradeTableProps) {
                   <TableHead>Date</TableHead>
                   <TableHead>Raw Score</TableHead>
                   <TableHead>Grade Display</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  {!readOnly && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -424,30 +425,32 @@ export function GradeTable({ grades, students, classId }: GradeTableProps) {
                           {displayGrade}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
-                            onClick={() => setEditingGrade(grade)}
-                            title="Edit grade"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                            <span className="sr-only">Edit</span>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:bg-destructive/10 cursor-pointer"
-                            onClick={() => setGradeToDelete(grade)}
-                            title="Delete grade"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            <span className="sr-only">Delete</span>
-                          </Button>
-                        </div>
-                      </TableCell>
+                      {!readOnly && (
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
+                              onClick={() => setEditingGrade(grade)}
+                              title="Edit grade"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              <span className="sr-only">Edit</span>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:bg-destructive/10 cursor-pointer"
+                              onClick={() => setGradeToDelete(grade)}
+                              title="Delete grade"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span className="sr-only">Delete</span>
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })}

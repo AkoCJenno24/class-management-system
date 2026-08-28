@@ -14,6 +14,8 @@ import {
   getClass,
   updateClass,
   deleteClass,
+  archiveClass,
+  restoreClass,
   onStudentsChange,
   onClassGradesChange,
   onClassActivitiesChange,
@@ -49,8 +51,13 @@ import {
   DoorOpen,
   Clock,
   Pin,
+  Archive,
+  ArchiveRestore,
+  GraduationCap,
 } from 'lucide-react';
 import { ScheduleDaysPicker } from '@/components/classes/ScheduleDaysPicker';
+import { TimePicker12Hour } from '@/components/classes/TimePicker12Hour';
+import { AcademicYearInput } from '@/components/classes/AcademicYearInput';
 import { ClassColorPicker } from '@/components/classes/ClassColorPicker';
 import { togglePinClass } from '@/lib/firebase/firestore';
 import type { Class, Student, Grade, Activity, ClassColor } from '@/types';
@@ -82,6 +89,7 @@ export function ClassDetailPage() {
   // Settings form
   const [editName, setEditName] = useState('');
   const [editSubject, setEditSubject] = useState('');
+  const [editAcademicYear, setEditAcademicYear] = useState('');
   const [editRoom, setEditRoom] = useState('');
   const [editStartTime, setEditStartTime] = useState('');
   const [editEndTime, setEditEndTime] = useState('');
@@ -92,6 +100,9 @@ export function ClassDetailPage() {
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   const [studentToRemove, setStudentToRemove] = useState<{ id: string; name: string } | null>(null);
+  const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [isDeleteClassDialogOpen, setIsDeleteClassDialogOpen] = useState(false);
   const [isDeletingClass, setIsDeletingClass] = useState(false);
 
@@ -126,6 +137,7 @@ export function ClassDetailPage() {
       setCurrentClass(cls);
       setEditName(cls.name);
       setEditSubject(cls.subject);
+      setEditAcademicYear(cls.academicYear ?? '');
       setEditRoom(cls.room ?? '');
       setEditStartTime(cls.startTime ?? '');
       setEditEndTime(cls.endTime ?? '');
@@ -192,6 +204,7 @@ export function ClassDetailPage() {
       await updateClass(user.uid, classId, {
         name: editName.trim(),
         subject: editSubject.trim(),
+        academicYear: editAcademicYear.trim(),
         room: editRoom.trim(),
         startTime: editStartTime.trim(),
         endTime: editEndTime.trim(),
@@ -204,6 +217,7 @@ export function ClassDetailPage() {
               ...prev,
               name: editName.trim(),
               subject: editSubject.trim(),
+              academicYear: editAcademicYear.trim(),
               room: editRoom.trim(),
               startTime: editStartTime.trim(),
               endTime: editEndTime.trim(),
@@ -217,6 +231,37 @@ export function ClassDetailPage() {
       toast.error('Failed to update class settings.');
     } finally {
       setIsSavingSettings(false);
+    }
+  };
+
+  const handleConfirmArchiveClass = async () => {
+    if (!user || !classId || !currentClass) return;
+
+    setIsArchiving(true);
+    try {
+      await archiveClass(user.uid, classId);
+      setCurrentClass((prev) => (prev ? { ...prev, status: 'archived', isPinned: false } : null));
+      toast.success(`Class "${currentClass.name}" moved to archive.`);
+      setIsArchiveDialogOpen(false);
+    } catch {
+      toast.error('Failed to archive class.');
+    } finally {
+      setIsArchiving(false);
+    }
+  };
+
+  const handleRestoreClass = async () => {
+    if (!user || !classId || !currentClass) return;
+
+    setIsRestoring(true);
+    try {
+      await restoreClass(user.uid, classId);
+      setCurrentClass((prev) => (prev ? { ...prev, status: 'active' } : null));
+      toast.success(`Class "${currentClass.name}" restored to active classes!`);
+    } catch {
+      toast.error('Failed to restore class.');
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -282,11 +327,37 @@ export function ClassDetailPage() {
 
   return (
     <div className="space-y-6">
+      {/* Archived Notice Banner */}
+      {currentClass.status === 'archived' && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200 shadow-2xs">
+          <div className="flex items-center gap-2.5 text-xs sm:text-sm font-medium">
+            <Archive className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span>
+              This class is in the archive. All student records, grades, activities, and attendance are preserved and viewable.
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleRestoreClass}
+            disabled={isRestoring}
+            className="shrink-0 bg-background hover:bg-muted text-foreground cursor-pointer text-xs h-7.5 shadow-2xs"
+          >
+            {isRestoring ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+            ) : (
+              <ArchiveRestore className="h-3.5 w-3.5 mr-1.5 text-primary" />
+            )}
+            Restore to Active
+          </Button>
+        </div>
+      )}
+
       {/* Top bar: Back button + Class info */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0">
           <Button variant="ghost" size="icon" asChild className="shrink-0 h-9 w-9 mt-0.5 sm:mt-0">
-            <Link to="/classes">
+            <Link to={currentClass.status === 'archived' ? '/classes/archived' : '/classes'}>
               <ArrowLeft className="h-4 w-4" />
               <span className="sr-only">Back to classes</span>
             </Link>
@@ -294,6 +365,18 @@ export function ClassDetailPage() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl sm:text-2xl font-bold tracking-tight break-words">{currentClass.name}</h1>
+              {currentClass.status === 'archived' && (
+                <Badge variant="outline" className="text-xs shrink-0 font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30">
+                  <Archive className="h-3 w-3 mr-1 text-amber-600" />
+                  Archived
+                </Badge>
+              )}
+              {currentClass.academicYear && (
+                <Badge variant="outline" className="text-xs shrink-0 font-normal bg-card">
+                  <GraduationCap className="h-3 w-3 mr-1 text-primary" />
+                  {currentClass.academicYear}
+                </Badge>
+              )}
               {currentClass.subject && (
                 <Badge variant="secondary" className="text-xs shrink-0">
                   {currentClass.subject}
@@ -315,45 +398,47 @@ export function ClassDetailPage() {
           </div>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
-          <Button
-            variant={currentClass.isPinned ? "default" : "outline"}
-            size="sm"
-            onClick={async () => {
-              if (!user || !classId) return;
-              const nextPinned = !currentClass.isPinned;
-              try {
-                await togglePinClass(user.uid, classId, nextPinned);
-                setCurrentClass((prev) => prev ? { ...prev, isPinned: nextPinned } : null);
-                toast.success(nextPinned ? `Pinned "${currentClass.name}" to top` : `Unpinned "${currentClass.name}"`);
-              } catch {
-                toast.error('Failed to update pin state.');
-              }
-            }}
-            className="cursor-pointer text-xs sm:text-sm shadow-xs"
-            title={currentClass.isPinned ? "Unpin class" : "Pin class to top"}
-          >
-            <Pin className={`h-3.5 w-3.5 mr-1.5 ${currentClass.isPinned ? 'fill-current' : ''}`} />
-            <span>{currentClass.isPinned ? 'Pinned' : 'Pin'}</span>
-          </Button>
+        {/* Action buttons (Only for active classes) */}
+        {currentClass.status !== 'archived' && (
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
+            <Button
+              variant={currentClass.isPinned ? "default" : "outline"}
+              size="sm"
+              onClick={async () => {
+                if (!user || !classId) return;
+                const nextPinned = !currentClass.isPinned;
+                try {
+                  await togglePinClass(user.uid, classId, nextPinned);
+                  setCurrentClass((prev) => prev ? { ...prev, isPinned: nextPinned } : null);
+                  toast.success(nextPinned ? `Pinned "${currentClass.name}" to top` : `Unpinned "${currentClass.name}"`);
+                } catch {
+                  toast.error('Failed to update pin state.');
+                }
+              }}
+              className="cursor-pointer text-xs sm:text-sm shadow-xs"
+              title={currentClass.isPinned ? "Unpin class" : "Pin class to top"}
+            >
+              <Pin className={`h-3.5 w-3.5 mr-1.5 ${currentClass.isPinned ? 'fill-current' : ''}`} />
+              <span>{currentClass.isPinned ? 'Pinned' : 'Pin'}</span>
+            </Button>
 
-          <Button variant="outline" onClick={() => setIsAddStudentOpen(true)} className="cursor-pointer flex-1 sm:flex-initial text-xs sm:text-sm">
-            <Users className="mr-1.5 h-4 w-4" />
-            Enroll Student
-          </Button>
-          <Button
-            onClick={() => {
-              setSelectedActivityForGrade(null);
-              setIsAddGradeOpen(true);
-            }}
-            disabled={enrolledStudents.length === 0}
-            className="cursor-pointer flex-1 sm:flex-initial text-xs sm:text-sm shadow-xs"
-          >
-            <Plus className="mr-1.5 h-4 w-4" />
-            Add Grade
-          </Button>
-        </div>
+            <Button variant="outline" onClick={() => setIsAddStudentOpen(true)} className="cursor-pointer flex-1 sm:flex-initial text-xs sm:text-sm">
+              <Users className="mr-1.5 h-4 w-4" />
+              Enroll Student
+            </Button>
+            <Button
+              onClick={() => {
+                setSelectedActivityForGrade(null);
+                setIsAddGradeOpen(true);
+              }}
+              disabled={enrolledStudents.length === 0}
+              className="cursor-pointer flex-1 sm:flex-initial text-xs sm:text-sm shadow-xs"
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              Add Grade
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -415,12 +500,16 @@ export function ClassDetailPage() {
                 <Users className="h-10 w-10 text-muted-foreground mb-3" />
                 <h4 className="text-base font-semibold">No students in this class yet</h4>
                 <p className="text-sm text-muted-foreground max-w-sm mt-1 mb-4">
-                  Enroll students from your global roster to start tracking attendance and grades.
+                  {currentClass.status === 'archived'
+                    ? 'No students were enrolled in this archived class.'
+                    : 'Enroll students from your global roster to start tracking attendance and grades.'}
                 </p>
-                <Button onClick={() => setIsAddStudentOpen(true)} className="cursor-pointer">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Enroll Students
-                </Button>
+                {currentClass.status !== 'archived' && (
+                  <Button onClick={() => setIsAddStudentOpen(true)} className="cursor-pointer">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Enroll Students
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ) : (
@@ -448,20 +537,24 @@ export function ClassDetailPage() {
                   </CardHeader>
                   <CardContent className="pt-0">
                     <div className="flex items-center justify-between border-t border-border/60 pt-3 mt-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs text-muted-foreground hover:text-destructive cursor-pointer"
-                        onClick={() =>
-                          setStudentToRemove({
-                            id: student.id,
-                            name: formatStudentFullName(student),
-                          })
-                        }
-                      >
-                        <UserMinus className="mr-1 h-3.5 w-3.5" />
-                        Remove
-                      </Button>
+                      {currentClass.status !== 'archived' ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs text-muted-foreground hover:text-destructive cursor-pointer"
+                          onClick={() =>
+                            setStudentToRemove({
+                              id: student.id,
+                              name: formatStudentFullName(student),
+                            })
+                          }
+                        >
+                          <UserMinus className="mr-1 h-3.5 w-3.5" />
+                          Remove
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground font-medium">Enrolled Record</span>
+                      )}
 
                       <Button variant="outline" size="sm" asChild className="text-xs cursor-pointer">
                         <Link to={`/classes/${classId}/students/${student.id}`}>
@@ -483,7 +576,9 @@ export function ClassDetailPage() {
             className={currentClass.name}
             activities={activities}
             grades={grades}
+            readOnly={currentClass.status === 'archived'}
             onRecordGradeForActivity={(activity) => {
+              if (currentClass.status === 'archived') return;
               setSelectedActivityForGrade(activity);
               setIsAddGradeOpen(true);
             }}
@@ -495,6 +590,7 @@ export function ClassDetailPage() {
           <AttendanceMonitor
             classId={classId!}
             students={enrolledStudents}
+            readOnly={currentClass.status === 'archived'}
           />
         </TabsContent>
 
@@ -552,7 +648,12 @@ export function ClassDetailPage() {
             </div>
           )}
 
-          <GradeTable grades={grades} students={enrolledStudents} classId={classId!} />
+          <GradeTable
+            grades={grades}
+            students={enrolledStudents}
+            classId={classId!}
+            readOnly={currentClass.status === 'archived'}
+          />
         </TabsContent>
 
         {/* Tab 5: Settings */}
@@ -560,10 +661,21 @@ export function ClassDetailPage() {
           <Card className="border-border shadow-xs">
             <CardHeader>
               <CardTitle className="text-lg">Class Settings</CardTitle>
-              <CardDescription>Update name, subject, room number, and schedule times for this class.</CardDescription>
+              <CardDescription>
+                {currentClass.status === 'archived'
+                  ? 'This class is archived. Settings are in read-only mode until restored.'
+                  : 'Update name, subject, room number, and schedule times for this class.'}
+              </CardDescription>
             </CardHeader>
             <form onSubmit={handleSaveSettings} noValidate>
               <CardContent className="space-y-4">
+                {currentClass.status === 'archived' && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs font-medium">
+                    <Archive className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>This class is in the archive (Read-Only). Restore the class to active status to make changes.</span>
+                  </div>
+                )}
+
                 {/* Class Name */}
                 <div className="space-y-1.5">
                   <Label htmlFor="edit-class-name" className="text-xs font-medium">
@@ -582,7 +694,7 @@ export function ClassDetailPage() {
                       setEditNameTouched(true);
                       setEditNameError(editName.trim() ? '' : 'Class name is required.');
                     }}
-                    disabled={isSavingSettings}
+                    disabled={isSavingSettings || currentClass.status === 'archived'}
                     required
                     className={editNameError ? 'border-destructive focus-visible:ring-destructive/30' : ''}
                   />
@@ -601,7 +713,7 @@ export function ClassDetailPage() {
                       id="edit-class-subject"
                       value={editSubject}
                       onChange={(e) => setEditSubject(e.target.value)}
-                      disabled={isSavingSettings}
+                      disabled={isSavingSettings || currentClass.status === 'archived'}
                     />
                   </div>
 
@@ -616,9 +728,23 @@ export function ClassDetailPage() {
                       placeholder="e.g., Room 304, Lab 2B"
                       value={editRoom}
                       onChange={(e) => setEditRoom(e.target.value)}
-                      disabled={isSavingSettings}
+                      disabled={isSavingSettings || currentClass.status === 'archived'}
                     />
                   </div>
+                </div>
+
+                {/* Academic Year (From Year - To Year) */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium flex items-center gap-1">
+                    <GraduationCap className="h-3.5 w-3.5 text-primary" />
+                    <span>Academic Year</span>
+                    <span className="text-[10px] text-muted-foreground font-normal">(optional)</span>
+                  </Label>
+                  <AcademicYearInput
+                    value={editAcademicYear}
+                    onChange={setEditAcademicYear}
+                    disabled={isSavingSettings || currentClass.status === 'archived'}
+                  />
                 </div>
 
                 {/* Schedule Time Pickers */}
@@ -629,7 +755,7 @@ export function ClassDetailPage() {
                       <span>Class Schedule Time</span>
                       <span className="text-[10px] text-muted-foreground font-normal">(optional)</span>
                     </Label>
-                    {(editStartTime || editEndTime) && (
+                    {(editStartTime || editEndTime) && currentClass.status !== 'archived' && (
                       <button
                         type="button"
                         onClick={() => {
@@ -643,18 +769,16 @@ export function ClassDetailPage() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 items-center">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
                     <div className="space-y-1">
                       <Label htmlFor="edit-class-start-time" className="text-[11px] text-muted-foreground">
                         Start Time
                       </Label>
-                      <Input
+                      <TimePicker12Hour
                         id="edit-class-start-time"
-                        type="time"
                         value={editStartTime}
-                        onChange={(e) => setEditStartTime(e.target.value)}
-                        disabled={isSavingSettings}
-                        className="text-xs cursor-pointer"
+                        onChange={setEditStartTime}
+                        disabled={isSavingSettings || currentClass.status === 'archived'}
                       />
                     </div>
 
@@ -662,13 +786,11 @@ export function ClassDetailPage() {
                       <Label htmlFor="edit-class-end-time" className="text-[11px] text-muted-foreground">
                         End Time
                       </Label>
-                      <Input
+                      <TimePicker12Hour
                         id="edit-class-end-time"
-                        type="time"
                         value={editEndTime}
-                        onChange={(e) => setEditEndTime(e.target.value)}
-                        disabled={isSavingSettings}
-                        className="text-xs cursor-pointer"
+                        onChange={setEditEndTime}
+                        disabled={isSavingSettings || currentClass.status === 'archived'}
                       />
                     </div>
                   </div>
@@ -678,35 +800,98 @@ export function ClassDetailPage() {
                 <ScheduleDaysPicker
                   selectedDays={editDays}
                   onChange={setEditDays}
-                  disabled={isSavingSettings}
+                  disabled={isSavingSettings || currentClass.status === 'archived'}
                 />
 
                 {/* Class Card Color Theme */}
                 <ClassColorPicker
                   selectedColor={editColor}
                   onChange={setEditColor}
-                  disabled={isSavingSettings}
+                  disabled={isSavingSettings || currentClass.status === 'archived'}
                 />
 
-                <Button type="submit" disabled={isSavingSettings || !editName.trim()} className="cursor-pointer">
-                  {isSavingSettings ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Saving...
-                    </>
-                  ) : (
-                    'Save Settings'
-                  )}
-                </Button>
+                {currentClass.status !== 'archived' ? (
+                  <Button type="submit" disabled={isSavingSettings || !editName.trim()} className="cursor-pointer">
+                    {isSavingSettings ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Settings'
+                    )}
+                  </Button>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">
+                    Settings cannot be saved while class is archived.
+                  </p>
+                )}
               </CardContent>
             </form>
           </Card>
 
+          {/* Class Archiving Section */}
+          <Card className="border-border/60 shadow-xs">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                {currentClass.status === 'archived' ? (
+                  <>
+                    <ArchiveRestore className="h-5 w-5 text-primary" />
+                    <span>Class Status: Archived</span>
+                  </>
+                ) : (
+                  <>
+                    <Archive className="h-5 w-5 text-amber-500" />
+                    <span>Move Class to Archive</span>
+                  </>
+                )}
+              </CardTitle>
+              <CardDescription>
+                {currentClass.status === 'archived'
+                  ? 'This class is currently archived. All records are safe. Restoring it will make it visible again in your active classes and sidebar quick workspaces.'
+                  : 'Move this class to the archive when the academic year is completed. All student enrollments, grades, activities, and attendance records will remain preserved and accessible whenever you want.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {currentClass.status === 'archived' ? (
+                <Button
+                  type="button"
+                  onClick={handleRestoreClass}
+                  disabled={isRestoring}
+                  className="cursor-pointer"
+                >
+                  {isRestoring ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Restoring...
+                    </>
+                  ) : (
+                    <>
+                      <ArchiveRestore className="mr-2 h-4 w-4" />
+                      Restore Class to Active
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsArchiveDialogOpen(true)}
+                  className="border-amber-500/40 hover:bg-amber-500/10 text-amber-800 dark:text-amber-300 cursor-pointer shadow-2xs"
+                >
+                  <Archive className="mr-2 h-4 w-4 text-amber-500" />
+                  Move to Archive
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Permanent Delete Danger Zone */}
           <Card className="border-destructive/30 shadow-xs">
             <CardHeader>
               <CardTitle className="text-lg text-destructive">Danger Zone</CardTitle>
               <CardDescription>
-                Permanently delete this class. This will remove student enrollments and all grades for this class.
+                Permanently delete this class. This will remove student enrollments and all grades for this class. Use this if you created a class with wrong info and wish to delete it.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -763,6 +948,22 @@ export function ClassDetailPage() {
         }
         confirmText="Remove from Class"
         onConfirm={handleConfirmRemoveStudent}
+      />
+
+      {/* Archive Class Confirmation Dialog */}
+      <ConfirmDeleteDialog
+        open={isArchiveDialogOpen}
+        onOpenChange={setIsArchiveDialogOpen}
+        title="Move Class to Archive?"
+        itemName={currentClass.name}
+        description={
+          <>
+            Are you sure you want to move <span className="font-semibold text-foreground">"{currentClass.name}"</span> to your archive? All student records, grades, activities, and attendance will remain safe and viewable under <span className="font-semibold text-foreground">Archived Classes</span>. You can restore this class back to active anytime.
+          </>
+        }
+        confirmText="Move to Archive"
+        isLoading={isArchiving}
+        onConfirm={handleConfirmArchiveClass}
       />
 
       {/* Delete Class Confirmation Dialog */}

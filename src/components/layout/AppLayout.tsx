@@ -28,6 +28,12 @@ function getBreadcrumbs(pathname: string) {
   if (pathname === '/') {
     return [{ label: 'Dashboard', href: '/' }];
   }
+  if (pathname === '/classes/archived') {
+    return [
+      { label: 'Classes', href: '/classes' },
+      { label: 'Archive Classes', href: '/classes/archived' },
+    ];
+  }
   if (pathname === '/classes') {
     return [{ label: 'Classes', href: '/classes' }];
   }

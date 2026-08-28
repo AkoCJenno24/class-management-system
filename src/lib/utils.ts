@@ -253,16 +253,20 @@ export const SHORT_DAY_NAMES: Record<string, string> = {
 };
 
 /**
- * Converts a 24-hour time string ("09:00", "13:30") to 12-hour AM/PM format ("9:00 AM", "1:30 PM").
+ * Converts a 24-hour time string ("09:00", "13:30") or already formatted string to 12-hour AM/PM format ("9:00 AM", "1:30 PM").
  */
 export function formatTime12Hour(timeStr?: string | null): string {
   if (!timeStr || !timeStr.trim()) return '';
-  const parts = timeStr.split(':');
-  if (parts.length < 2) return timeStr;
+  const trimmed = timeStr.trim();
+  if (/am|pm/i.test(trimmed)) {
+    return trimmed;
+  }
+  const parts = trimmed.split(':');
+  if (parts.length < 2) return trimmed;
 
   const hours = parseInt(parts[0], 10);
-  const minutes = parts[1];
-  if (isNaN(hours)) return timeStr;
+  const minutes = parts[1].slice(0, 2);
+  if (isNaN(hours)) return trimmed;
 
   const ampm = hours >= 12 ? 'PM' : 'AM';
   const displayHours = hours % 12 || 12;

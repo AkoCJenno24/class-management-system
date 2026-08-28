@@ -174,6 +174,7 @@ export async function createClass(
     name: string;
     subject?: string;
     description?: string;
+    academicYear?: string;
     room?: string;
     startTime?: string;
     endTime?: string;
@@ -186,12 +187,15 @@ export async function createClass(
   const ref = await addDoc(collection(db, 'users', uid, 'classes'), {
     name: data.name,
     subject: data.subject ?? '',
+    description: data.description ?? '',
+    academicYear: data.academicYear ?? '',
     room: data.room ?? '',
     startTime: data.startTime ?? '',
     endTime: data.endTime ?? '',
     days: Array.isArray(data.days) ? data.days : [],
     color: data.color ?? 'default',
     isPinned: data.isPinned ?? false,
+    status: 'active',
     order: data.order ?? Date.now(),
     studentCount: 0,
     createdAt: serverTimestamp(),
@@ -220,6 +224,23 @@ export async function togglePinClass(
 ): Promise<void> {
   await updateDoc(doc(db, 'users', uid, 'classes', classId), {
     isPinned,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Archives a class to preserve records while hiding from active lists. */
+export async function archiveClass(uid: string, classId: string): Promise<void> {
+  await updateDoc(doc(db, 'users', uid, 'classes', classId), {
+    status: 'archived',
+    isPinned: false, // Automatically unpin when archiving
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Restores an archived class back to active status. */
+export async function restoreClass(uid: string, classId: string): Promise<void> {
+  await updateDoc(doc(db, 'users', uid, 'classes', classId), {
+    status: 'active',
     updatedAt: serverTimestamp(),
   });
 }
@@ -285,12 +306,14 @@ export function onClassesChange(
           name: data.name ?? '',
           subject: data.subject ?? '',
           description: data.description ?? '',
+          academicYear: data.academicYear ?? '',
           room: data.room ?? '',
           startTime: data.startTime ?? '',
           endTime: data.endTime ?? '',
           days: Array.isArray(data.days) ? data.days : [],
           color: (data.color as ClassColor) || 'default',
           isPinned: data.isPinned ?? false,
+          status: (data.status as 'active' | 'archived') || 'active',
           order: typeof data.order === 'number' ? data.order : 0,
           studentCount: data.studentCount ?? 0,
           createdAt: toDate(data.createdAt),
@@ -326,12 +349,14 @@ export async function getClass(uid: string, classId: string): Promise<Class | nu
     name: data.name ?? '',
     subject: data.subject ?? '',
     description: data.description ?? '',
+    academicYear: data.academicYear ?? '',
     room: data.room ?? '',
     startTime: data.startTime ?? '',
     endTime: data.endTime ?? '',
     days: Array.isArray(data.days) ? data.days : [],
     color: (data.color as ClassColor) || 'default',
     isPinned: data.isPinned ?? false,
+    status: (data.status as 'active' | 'archived') || 'active',
     order: typeof data.order === 'number' ? data.order : 0,
     studentCount: data.studentCount ?? 0,
     createdAt: toDate(data.createdAt),

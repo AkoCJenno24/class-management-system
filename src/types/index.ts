@@ -103,12 +103,14 @@ export interface Class {
   name: string;
   subject: string;
   description?: string;
+  academicYear?: string;
   room?: string;
   startTime?: string;
   endTime?: string;
   days?: string[];
   color?: ClassColor;
   isPinned?: boolean;
+  status?: 'active' | 'archived';
   order?: number;
   studentCount: number;
   createdAt: Date;

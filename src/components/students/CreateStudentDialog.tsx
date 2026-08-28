@@ -50,7 +50,7 @@ import {
   STUDENT_GENDER_OPTIONS,
   type StudentStatus,
 } from '@/types';
-import { capitalizeFirst, getInitials, getDeterministicAvatarColor, resolveAvatarSource } from '@/lib/utils';
+import { capitalizeFirst, resolveAvatarSource } from '@/lib/utils';
 
 interface CreateStudentDialogProps {
   open: boolean;
@@ -294,7 +294,6 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
     }
   };
 
-  const selectedPresetObj = AVATAR_PRESETS.find((p) => p.id === avatarPreset);
 
   return (
     <Dialog
@@ -351,47 +350,57 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
                     const showImage = resolved.mode === 'photo' || resolved.mode === 'preset';
 
                     return (
-                      <div className="relative group shrink-0">
-                        <div
+                      <div className="relative shrink-0">
+                        <button
+                          type="button"
                           onClick={() => fileInputRef.current?.click()}
-                          className="cursor-pointer rounded-full p-0.5 ring-2 ring-primary/30 hover:ring-primary/70 transition-all"
+                          disabled={isProcessingAvatar}
+                          className="relative block rounded-full p-0.5 ring-2 ring-primary/30 hover:ring-primary/70 focus-visible:outline-none focus-visible:ring-primary transition-all cursor-pointer disabled:cursor-wait"
                           title="Upload photo"
+                          aria-label="Upload student photo"
                         >
-                          <div
-                            className="h-13 w-13 rounded-full shadow-xs overflow-hidden flex items-center justify-center select-none ring-1 ring-border/40 relative"
-                            style={{
-                              backgroundColor: !showImage ? resolved.bgColor : 'transparent',
-                            }}
-                          >
+                          <span className="relative block h-13 w-13 overflow-hidden rounded-full bg-transparent shadow-xs ring-1 ring-border/40">
                             {showImage && resolved.src ? (
                               <img
                                 src={resolved.src}
                                 alt="Avatar"
-                                className="object-cover h-full w-full rounded-full relative z-10"
+                                className="absolute inset-0 block h-full w-full rounded-full object-cover opacity-100"
+                                style={{
+                                  backgroundColor: 'transparent',
+                                  filter: 'none',
+                                  mixBlendMode: 'normal',
+                                }}
                               />
                             ) : (
-                              <span className="text-sm font-bold text-white select-none">
+                              <span
+                                className="absolute inset-0 flex items-center justify-center rounded-full text-sm font-bold text-white select-none"
+                                style={{ backgroundColor: resolved.bgColor }}
+                              >
                                 {resolved.initials}
                               </span>
                             )}
-                          </div>
 
-                          <div className="absolute inset-0.5 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity z-20">
-                            {isProcessingAvatar ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Camera className="h-3.5 w-3.5" />
+                            {isProcessingAvatar && (
+                              <span className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-black/40 text-white">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              </span>
                             )}
-                          </div>
-                        </div>
+                          </span>
+                        </button>
 
                         <button
                           type="button"
                           onClick={() => fileInputRef.current?.click()}
-                          className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xs hover:scale-105 active:scale-95 transition-all ring-1.5 ring-background cursor-pointer"
+                          disabled={isProcessingAvatar}
+                          className="absolute -bottom-0.5 -right-0.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xs hover:scale-105 active:scale-95 transition-all ring-1.5 ring-background cursor-pointer disabled:cursor-wait"
                           title="Upload photo"
+                          aria-label="Upload student photo"
                         >
-                          <Camera className="h-2.5 w-2.5" />
+                          {isProcessingAvatar ? (
+                            <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                          ) : (
+                            <Camera className="h-2.5 w-2.5" />
+                          )}
                         </button>
 
                         <input
@@ -400,6 +409,7 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
                           accept="image/png,image/jpeg,image/jpg,image/webp"
                           onChange={handleAvatarFileSelect}
                           className="hidden"
+                          aria-hidden="true"
                         />
                       </div>
                     );
@@ -444,11 +454,10 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
                           key={preset.id}
                           type="button"
                           onClick={() => handleSelectPreset(preset.id)}
-                          className={`relative h-6 w-6 rounded-full overflow-hidden border transition-all cursor-pointer shrink-0 ${
-                            avatarPreset === preset.id
+                          className={`relative h-6 w-6 rounded-full overflow-hidden border transition-all cursor-pointer shrink-0 ${avatarPreset === preset.id
                               ? 'border-primary ring-2 ring-primary/40 scale-110'
                               : 'border-border opacity-70 hover:opacity-100 hover:scale-105'
-                          }`}
+                            }`}
                           title={preset.label}
                         >
                           <img src={preset.src} alt={preset.label} className="h-full w-full object-cover" />
@@ -465,9 +474,8 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
                                 key={col}
                                 type="button"
                                 onClick={() => setAvatarColor(col)}
-                                className={`h-3.5 w-3.5 rounded-full transition-all cursor-pointer ${
-                                  avatarColor === col ? 'ring-2 ring-primary ring-offset-1 scale-125' : 'hover:scale-110'
-                                }`}
+                                className={`h-3.5 w-3.5 rounded-full transition-all cursor-pointer ${avatarColor === col ? 'ring-2 ring-primary ring-offset-1 scale-125' : 'hover:scale-110'
+                                  }`}
                                 style={{ backgroundColor: col }}
                                 title={col}
                               />
@@ -495,9 +503,8 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
                     disabled={isLoading}
                     autoFocus
                     required
-                    className={`h-8.5 text-xs shadow-2xs ${
-                      errors.firstName ? 'border-destructive focus-visible:ring-destructive/30' : ''
-                    }`}
+                    className={`h-8.5 text-xs shadow-2xs ${errors.firstName ? 'border-destructive focus-visible:ring-destructive/30' : ''
+                      }`}
                   />
                   {errors.firstName && (
                     <p className="text-[10px] font-medium text-destructive leading-tight">{errors.firstName}</p>
@@ -530,9 +537,8 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
                     onBlur={() => handleBlur('lastName', lastName)}
                     disabled={isLoading}
                     required
-                    className={`h-8.5 text-xs shadow-2xs ${
-                      errors.lastName ? 'border-destructive focus-visible:ring-destructive/30' : ''
-                    }`}
+                    className={`h-8.5 text-xs shadow-2xs ${errors.lastName ? 'border-destructive focus-visible:ring-destructive/30' : ''
+                      }`}
                   />
                   {errors.lastName && (
                     <p className="text-[10px] font-medium text-destructive leading-tight">{errors.lastName}</p>
@@ -567,9 +573,8 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
                     onChange={(e) => handleFieldChange('dateOfBirth', e.target.value, setDateOfBirth)}
                     onBlur={() => handleBlur('dateOfBirth', dateOfBirth)}
                     disabled={isLoading}
-                    className={`h-8.5 text-xs shadow-2xs ${
-                      errors.dateOfBirth ? 'border-destructive focus-visible:ring-destructive/30' : ''
-                    }`}
+                    className={`h-8.5 text-xs shadow-2xs ${errors.dateOfBirth ? 'border-destructive focus-visible:ring-destructive/30' : ''
+                      }`}
                   />
                   {errors.dateOfBirth && (
                     <p className="text-[10px] font-medium text-destructive leading-tight">{errors.dateOfBirth}</p>
@@ -723,9 +728,8 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
                   onChange={(e) => handleFieldChange('email', e.target.value, setEmail)}
                   onBlur={() => handleBlur('email', email)}
                   disabled={isLoading}
-                  className={`h-8.5 text-xs shadow-2xs ${
-                    errors.email ? 'border-destructive focus-visible:ring-destructive/30' : ''
-                  }`}
+                  className={`h-8.5 text-xs shadow-2xs ${errors.email ? 'border-destructive focus-visible:ring-destructive/30' : ''
+                    }`}
                 />
                 {errors.email && (
                   <p className="text-[10px] font-medium text-destructive leading-tight">{errors.email}</p>
@@ -745,9 +749,8 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
                   onChange={(e) => handleFieldChange('phone', e.target.value, setPhone)}
                   onBlur={() => handleBlur('phone', phone)}
                   disabled={isLoading}
-                  className={`h-8.5 text-xs shadow-2xs ${
-                    errors.phone ? 'border-destructive focus-visible:ring-destructive/30' : ''
-                  }`}
+                  className={`h-8.5 text-xs shadow-2xs ${errors.phone ? 'border-destructive focus-visible:ring-destructive/30' : ''
+                    }`}
                 />
                 {errors.phone && (
                   <p className="text-[10px] font-medium text-destructive leading-tight">{errors.phone}</p>

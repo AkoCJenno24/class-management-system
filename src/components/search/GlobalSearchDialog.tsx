@@ -118,7 +118,7 @@ export function GlobalSearchDialog({
               return (
                 <CommandItem
                   key={cls.id}
-                  value={`class ${cls.name} ${cls.subject} ${cls.room || ''} ${daysStr} ${schedule} ${cls.color || ''}`}
+                  value={`class ${cls.name} ${cls.subject} ${cls.academicYear || ''} ${cls.room || ''} ${daysStr} ${schedule} ${cls.color || ''} ${cls.status || ''}`}
                   onSelect={() => handleSelect(() => navigate(`/classes/${cls.id}`))}
                   className="flex items-center justify-between gap-3 p-2 rounded-lg cursor-pointer hover:bg-accent transition-colors"
                 >
@@ -134,13 +134,19 @@ export function GlobalSearchDialog({
                       <School className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-sm font-semibold truncate text-foreground leading-tight">{cls.name}</p>
                         {cls.isPinned && (
                           <Pin className="h-3 w-3 text-primary fill-current shrink-0" />
                         )}
+                        {cls.status === 'archived' && (
+                          <span className="text-[10px] px-1 py-0.2 rounded bg-amber-500/15 text-amber-600 font-medium">
+                            Archived
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground truncate mt-0.5">
+                        {cls.academicYear ? `${cls.academicYear} • ` : ''}
                         {cls.subject || 'General Class'}
                         {cls.room ? ` • ${cls.room}` : ''}
                         {schedule ? ` • ${schedule}` : ''}

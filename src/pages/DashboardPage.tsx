@@ -43,7 +43,10 @@ export function DashboardPage() {
   }, [user]);
 
   const totalStudents = students.length;
-  const totalClasses = classes.length;
+  const activeClasses = classes.filter((c) => c.status !== 'archived');
+  const archivedClasses = classes.filter((c) => c.status === 'archived');
+  const activeCount = activeClasses.length;
+  const archivedCount = archivedClasses.length;
 
   return (
     <div className="space-y-6">
@@ -53,7 +56,7 @@ export function DashboardPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-1">
               <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-                Welcome back, {teacherProfile?.firstName || 'Teacher'}!
+                Welcome back teacher, {teacherProfile?.firstName || 'Teacher'}!
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground">
                 Here is an overview of your active classes, roster, and daily grading records.
@@ -82,16 +85,19 @@ export function DashboardPage() {
         <Card className="border-border shadow-xs hover:border-primary/40 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold text-muted-foreground uppercase">
-              Total Classes
+              Active Classes
             </CardTitle>
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <BookOpen className="h-4 w-4" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-extrabold">{totalClasses}</div>
+            <div className="text-3xl font-extrabold">{activeCount}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              {totalClasses === 0 ? 'No classes yet' : 'Active class workspaces'}
+              {activeCount === 0
+                ? 'No active classes'
+                : `${activeCount} active workspace${activeCount === 1 ? '' : 's'}${archivedCount > 0 ? ` (${archivedCount} archived)` : ''
+                }`}
             </p>
           </CardContent>
         </Card>
@@ -147,7 +153,7 @@ export function DashboardPage() {
       </div>
 
       {/* Empty state when no classes or students */}
-      {totalClasses === 0 && totalStudents === 0 && (
+      {activeCount === 0 && totalStudents === 0 && (
         <Card className="border-dashed shadow-xs">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 mb-4 text-primary">
