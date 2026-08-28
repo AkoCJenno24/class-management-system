@@ -66,6 +66,7 @@ import {
   formatGrade,
   getGradeColor,
   formatStudentFullName,
+  formatClassSchedule,
 } from '@/lib/utils';
 
 export function StudentClassDashboardPage() {
@@ -324,10 +325,10 @@ export function StudentClassDashboardPage() {
 
       {/* Student Profile Hero Banner */}
       <Card className="border-border bg-card shadow-xs overflow-hidden">
-        <CardContent className="p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 min-w-0">
-              <Button variant="outline" size="icon" className="shrink-0 h-10 w-10 self-start sm:self-center" asChild>
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 sm:gap-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5 min-w-0">
+              <Button variant="outline" size="icon" className="shrink-0 h-9 w-9 sm:h-10 sm:w-10 self-start sm:self-center" asChild>
                 <Link to={`/classes/${classId}`}>
                   <ArrowLeft className="h-4 w-4" />
                   <span className="sr-only">Back</span>
@@ -342,8 +343,8 @@ export function StudentClassDashboardPage() {
               />
 
               <div className="space-y-1.5 min-w-0">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground break-words">
                     {currentStudent ? formatStudentFullName(currentStudent) : ''}
                   </h2>
                   {currentStudent?.status && (
@@ -365,10 +366,14 @@ export function StudentClassDashboardPage() {
                 <p className="text-xs text-muted-foreground">
                   Enrolled in <span className="font-semibold text-foreground">{currentClass.name}</span>
                   {currentClass.subject ? ` • ${currentClass.subject}` : ''}
+                  {currentClass.room ? ` • ${currentClass.room}` : ''}
+                  {formatClassSchedule(currentClass.days, currentClass.startTime, currentClass.endTime)
+                    ? ` • ${formatClassSchedule(currentClass.days, currentClass.startTime, currentClass.endTime)}`
+                    : ''}
                 </p>
 
                 {/* Extended Details Chips */}
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-1 text-xs text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1.5 pt-1 text-xs text-muted-foreground">
                   {currentStudent?.gender && (
                     <span className="flex items-center gap-1">
                       <User className="h-3 w-3 text-primary/70 shrink-0" />
@@ -393,7 +398,7 @@ export function StudentClassDashboardPage() {
                       className="flex items-center gap-1 text-primary hover:underline"
                     >
                       <Mail className="h-3 w-3 shrink-0" />
-                      {currentStudent.email}
+                      <span className="truncate max-w-[160px]">{currentStudent.email}</span>
                     </a>
                   )}
                   {currentStudent?.phone && (
@@ -408,24 +413,24 @@ export function StudentClassDashboardPage() {
                   {currentStudent?.address && (
                     <span className="flex items-center gap-1">
                       <MapPin className="h-3 w-3 text-primary/70 shrink-0" />
-                      {currentStudent.address}
+                      <span className="truncate max-w-[180px]">{currentStudent.address}</span>
                     </span>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5 shrink-0 self-start lg:self-center">
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0 self-stretch sm:self-start lg:self-center">
               <Button
                 variant="outline"
                 onClick={() => setIsEditStudentOpen(true)}
-                className="cursor-pointer shadow-2xs"
+                className="cursor-pointer shadow-2xs flex-1 sm:flex-initial text-xs sm:text-sm"
               >
                 <Pencil className="mr-1.5 h-3.5 w-3.5" />
                 Edit Profile
               </Button>
-              <Button onClick={() => setIsAddGradeOpen(true)} className="shadow-xs cursor-pointer">
-                <Plus className="mr-2 h-4 w-4" />
+              <Button onClick={() => setIsAddGradeOpen(true)} className="shadow-xs cursor-pointer flex-1 sm:flex-initial text-xs sm:text-sm">
+                <Plus className="mr-1.5 h-4 w-4" />
                 Record Grade
               </Button>
             </div>

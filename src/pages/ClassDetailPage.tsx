@@ -46,9 +46,21 @@ import {
   UserMinus,
   ClipboardCheck,
   BookMarked,
+  DoorOpen,
+  Clock,
+  Pin,
 } from 'lucide-react';
-import type { Class, Student, Grade, Activity } from '@/types';
-import { calculatePercentage, formatGrade, getGradeColor, formatStudentFullName } from '@/lib/utils';
+import { ScheduleDaysPicker } from '@/components/classes/ScheduleDaysPicker';
+import { ClassColorPicker } from '@/components/classes/ClassColorPicker';
+import { togglePinClass } from '@/lib/firebase/firestore';
+import type { Class, Student, Grade, Activity, ClassColor } from '@/types';
+import {
+  calculatePercentage,
+  formatGrade,
+  getGradeColor,
+  formatStudentFullName,
+  formatClassSchedule,
+} from '@/lib/utils';
 import { DEFAULT_GRADING_SCALE } from '@/types';
 
 export function ClassDetailPage() {
@@ -70,7 +82,11 @@ export function ClassDetailPage() {
   // Settings form
   const [editName, setEditName] = useState('');
   const [editSubject, setEditSubject] = useState('');
-  const [editDescription, setEditDescription] = useState('');
+  const [editRoom, setEditRoom] = useState('');
+  const [editStartTime, setEditStartTime] = useState('');
+  const [editEndTime, setEditEndTime] = useState('');
+  const [editDays, setEditDays] = useState<string[]>([]);
+  const [editColor, setEditColor] = useState<ClassColor>('default');
   const [editNameError, setEditNameError] = useState('');
   const [editNameTouched, setEditNameTouched] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -110,7 +126,11 @@ export function ClassDetailPage() {
       setCurrentClass(cls);
       setEditName(cls.name);
       setEditSubject(cls.subject);
-      setEditDescription(cls.description);
+      setEditRoom(cls.room ?? '');
+      setEditStartTime(cls.startTime ?? '');
+      setEditEndTime(cls.endTime ?? '');
+      setEditDays(Array.isArray(cls.days) ? cls.days : []);
+      setEditColor(cls.color || 'default');
 
       unsubStudents = onStudentsChange(user.uid, setAllStudents);
       unsubGrades = onClassGradesChange(user.uid, classId, setGrades);
@@ -172,7 +192,11 @@ export function ClassDetailPage() {
       await updateClass(user.uid, classId, {
         name: editName.trim(),
         subject: editSubject.trim(),
-        description: editDescription.trim(),
+        room: editRoom.trim(),
+        startTime: editStartTime.trim(),
+        endTime: editEndTime.trim(),
+        days: editDays,
+        color: editColor,
       });
       setCurrentClass((prev) =>
         prev
@@ -180,7 +204,11 @@ export function ClassDetailPage() {
               ...prev,
               name: editName.trim(),
               subject: editSubject.trim(),
-              description: editDescription.trim(),
+              room: editRoom.trim(),
+              startTime: editStartTime.trim(),
+              endTime: editEndTime.trim(),
+              days: editDays,
+              color: editColor,
             }
           : null
       );
@@ -255,35 +283,63 @@ export function ClassDetailPage() {
   return (
     <div className="space-y-6">
       {/* Top bar: Back button + Class info */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" asChild>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0">
+          <Button variant="ghost" size="icon" asChild className="shrink-0 h-9 w-9 mt-0.5 sm:mt-0">
             <Link to="/classes">
               <ArrowLeft className="h-4 w-4" />
               <span className="sr-only">Back to classes</span>
             </Link>
           </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight">{currentClass.name}</h1>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight break-words">{currentClass.name}</h1>
               {currentClass.subject && (
-                <Badge variant="secondary" className="text-xs">
+                <Badge variant="secondary" className="text-xs shrink-0">
                   {currentClass.subject}
                 </Badge>
               )}
+              {currentClass.room && (
+                <Badge variant="outline" className="text-xs shrink-0 font-normal">
+                  <DoorOpen className="h-3 w-3 mr-1 text-primary" />
+                  {currentClass.room}
+                </Badge>
+              )}
             </div>
-            {currentClass.description && (
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {currentClass.description}
-              </p>
+            {formatClassSchedule(currentClass.days, currentClass.startTime, currentClass.endTime) && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+                <Clock className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span>{formatClassSchedule(currentClass.days, currentClass.startTime, currentClass.endTime)}</span>
+              </div>
             )}
           </div>
         </div>
 
         {/* Action buttons */}
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setIsAddStudentOpen(true)} className="cursor-pointer">
-            <Users className="mr-2 h-4 w-4" />
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
+          <Button
+            variant={currentClass.isPinned ? "default" : "outline"}
+            size="sm"
+            onClick={async () => {
+              if (!user || !classId) return;
+              const nextPinned = !currentClass.isPinned;
+              try {
+                await togglePinClass(user.uid, classId, nextPinned);
+                setCurrentClass((prev) => prev ? { ...prev, isPinned: nextPinned } : null);
+                toast.success(nextPinned ? `Pinned "${currentClass.name}" to top` : `Unpinned "${currentClass.name}"`);
+              } catch {
+                toast.error('Failed to update pin state.');
+              }
+            }}
+            className="cursor-pointer text-xs sm:text-sm shadow-xs"
+            title={currentClass.isPinned ? "Unpin class" : "Pin class to top"}
+          >
+            <Pin className={`h-3.5 w-3.5 mr-1.5 ${currentClass.isPinned ? 'fill-current' : ''}`} />
+            <span>{currentClass.isPinned ? 'Pinned' : 'Pin'}</span>
+          </Button>
+
+          <Button variant="outline" onClick={() => setIsAddStudentOpen(true)} className="cursor-pointer flex-1 sm:flex-initial text-xs sm:text-sm">
+            <Users className="mr-1.5 h-4 w-4" />
             Enroll Student
           </Button>
           <Button
@@ -292,9 +348,9 @@ export function ClassDetailPage() {
               setIsAddGradeOpen(true);
             }}
             disabled={enrolledStudents.length === 0}
-            className="cursor-pointer"
+            className="cursor-pointer flex-1 sm:flex-initial text-xs sm:text-sm shadow-xs"
           >
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="mr-1.5 h-4 w-4" />
             Add Grade
           </Button>
         </div>
@@ -302,11 +358,11 @@ export function ClassDetailPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="students" className="space-y-6">
-        <div className="w-full overflow-x-auto pb-1">
+        <div className="w-full overflow-x-auto pb-1.5 scrollbar-none touch-scroll">
           <TabsList className="inline-flex h-auto w-auto p-1 gap-1 bg-muted/80 rounded-xl border border-border/60">
             <TabsTrigger
               value="students"
-              className="flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg cursor-pointer"
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg cursor-pointer whitespace-nowrap"
             >
               <Users className="h-4 w-4" />
               <span>Students</span>
@@ -368,99 +424,54 @@ export function ClassDetailPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {enrolledStudents.map((student) => {
-                const studentGrades = grades.filter((g) => g.studentId === student.id);
-                const count = studentGrades.length;
-                let avgPercent: number | null = null;
-                let displayGrade = 'No Grades';
-                let color = '#71717a';
-
-                if (count > 0) {
-                  const sumPct = studentGrades.reduce(
-                    (sum, g) => sum + calculatePercentage(g.score, g.maxScore),
-                    0
-                  );
-                  avgPercent = Math.round(sumPct / count);
-                  displayGrade = formatGrade(avgPercent, 100, scale);
-                  color = getGradeColor(avgPercent, 100, scale);
-                }
-
-                const studentName = formatStudentFullName(student);
-
-                return (
-                  <Link
-                    key={student.id}
-                    to={`/classes/${classId}/students/${student.id}`}
-                    className="block group"
-                  >
-                    <Card className="flex flex-col justify-between p-4 gap-3 border-border shadow-xs group-hover:border-primary/50 group-hover:shadow-md transition-all duration-200 cursor-pointer h-full">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <StudentAvatar student={student} size="default" showStatusIndicator />
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="font-semibold text-sm group-hover:text-primary transition-colors truncate">
-                                {studentName}
-                              </p>
-                              {student.status && student.status !== 'active' && (
-                                <StudentStatusBadge status={student.status} showDot={false} className="text-[10px] py-0 px-1.5" />
-                              )}
-                            </div>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {student.gradeLevel ? `${student.gradeLevel}` : ''}
-                              {student.gradeLevel && student.studentId ? ' • ' : ''}
-                              {student.studentId ? `ID: ${student.studentId}` : (!student.gradeLevel ? 'No ID' : '')}
-                            </p>
-                          </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {enrolledStudents.map((student) => (
+                <Card
+                  key={student.id}
+                  className="border-border shadow-xs hover:border-primary/40 transition-colors flex flex-col justify-between"
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <StudentAvatar student={student} size="default" showStatusIndicator />
+                        <div>
+                          <CardTitle className="text-base font-semibold">
+                            {formatStudentFullName(student)}
+                          </CardTitle>
+                          <p className="text-xs text-muted-foreground font-mono">
+                            {student.studentId ? `ID: ${student.studentId}` : 'No ID'}
+                          </p>
                         </div>
-
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mr-1 -mt-1 cursor-pointer"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setStudentToRemove({
-                              id: student.id,
-                              name: studentName,
-                            });
-                          }}
-                          title="Remove from class"
-                        >
-                          <UserMinus className="h-4 w-4" />
-                        </Button>
                       </div>
+                      <StudentStatusBadge status={student.status} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="flex items-center justify-between border-t border-border/60 pt-3 mt-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs text-muted-foreground hover:text-destructive cursor-pointer"
+                        onClick={() =>
+                          setStudentToRemove({
+                            id: student.id,
+                            name: formatStudentFullName(student),
+                          })
+                        }
+                      >
+                        <UserMinus className="mr-1 h-3.5 w-3.5" />
+                        Remove
+                      </Button>
 
-                      {/* Combined average badge & activity counter */}
-                      <div className="flex items-center justify-between border-t border-border/60 pt-2.5 text-xs">
-                        <span className="text-muted-foreground">
-                          {count} {count === 1 ? 'activity' : 'activities'}
-                        </span>
-                        {avgPercent !== null ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-foreground">{avgPercent}%</span>
-                            <Badge
-                              variant="outline"
-                              className="font-bold text-xs py-0.5 px-2"
-                              style={{
-                                borderColor: color,
-                                color: color,
-                                backgroundColor: `${color}10`,
-                              }}
-                            >
-                              {displayGrade}
-                            </Badge>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground italic">No grades yet</span>
-                        )}
-                      </div>
-                    </Card>
-                  </Link>
-                );
-              })}
+                      <Button variant="outline" size="sm" asChild className="text-xs cursor-pointer">
+                        <Link to={`/classes/${classId}/students/${student.id}`}>
+                          View Records
+                        </Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </TabsContent>
@@ -481,42 +492,55 @@ export function ClassDetailPage() {
 
         {/* Tab 3: Attendance */}
         <TabsContent value="attendance" className="space-y-4">
-          <AttendanceMonitor classId={classId!} students={enrolledStudents} />
+          <AttendanceMonitor
+            classId={classId!}
+            students={enrolledStudents}
+          />
         </TabsContent>
 
         {/* Tab 4: Grades */}
-        <TabsContent value="grades" className="space-y-4">
+        <TabsContent value="grades" className="space-y-6">
           {grades.length > 0 && (
             <div className="grid gap-4 sm:grid-cols-3">
               <Card className="border-border shadow-xs">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-xs text-muted-foreground font-medium uppercase">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-xs font-semibold text-muted-foreground uppercase">
                     Class Average
                   </CardTitle>
+                  <Award className="h-4 w-4 text-primary" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{averagePercentage}%</div>
+                  <div
+                    className="text-2xl font-bold"
+                    style={{
+                      color: getGradeColor(averagePercentage, 100, scale),
+                    }}
+                  >
+                    {averagePercentage}%
+                  </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Display grade: {formatGrade(averagePercentage, 100, scale)}
+                    Display: {formatGrade(averagePercentage, 100, scale)}
                   </p>
                 </CardContent>
               </Card>
               <Card className="border-border shadow-xs">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-xs text-muted-foreground font-medium uppercase">
-                    Assignments Recorded
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-xs font-semibold text-muted-foreground uppercase">
+                    Total Grades Logged
                   </CardTitle>
+                  <Plus className="h-4 w-4 text-primary" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{grades.length}</div>
-                  <p className="text-xs text-muted-foreground mt-1">Across all students</p>
+                  <p className="text-xs text-muted-foreground mt-1">Individual score entries</p>
                 </CardContent>
               </Card>
               <Card className="border-border shadow-xs">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-xs text-muted-foreground font-medium uppercase">
-                    Grading Scale
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-xs font-semibold text-muted-foreground uppercase">
+                    Grading System
                   </CardTitle>
+                  <Settings className="h-4 w-4 text-primary" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-lg font-bold capitalize">{scale.type}</div>
@@ -536,10 +560,11 @@ export function ClassDetailPage() {
           <Card className="border-border shadow-xs">
             <CardHeader>
               <CardTitle className="text-lg">Class Settings</CardTitle>
-              <CardDescription>Update name, subject, or description for this class.</CardDescription>
+              <CardDescription>Update name, subject, room number, and schedule times for this class.</CardDescription>
             </CardHeader>
             <form onSubmit={handleSaveSettings} noValidate>
               <CardContent className="space-y-4">
+                {/* Class Name */}
                 <div className="space-y-1.5">
                   <Label htmlFor="edit-class-name" className="text-xs font-medium">
                     Class Name <span className="text-destructive">*</span>
@@ -565,28 +590,104 @@ export function ClassDetailPage() {
                     <p className="text-xs font-medium text-destructive">{editNameError}</p>
                   )}
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="edit-class-subject" className="text-xs font-medium">
-                    Subject <span className="text-[10px] text-muted-foreground">(optional)</span>
-                  </Label>
-                  <Input
-                    id="edit-class-subject"
-                    value={editSubject}
-                    onChange={(e) => setEditSubject(e.target.value)}
-                    disabled={isSavingSettings}
-                  />
+
+                {/* Subject & Room Number */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-class-subject" className="text-xs font-medium">
+                      Subject <span className="text-[10px] text-muted-foreground">(optional)</span>
+                    </Label>
+                    <Input
+                      id="edit-class-subject"
+                      value={editSubject}
+                      onChange={(e) => setEditSubject(e.target.value)}
+                      disabled={isSavingSettings}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-class-room" className="text-xs font-medium flex items-center gap-1">
+                      <DoorOpen className="h-3.5 w-3.5 text-primary" />
+                      <span>Room Number</span>
+                      <span className="text-[10px] text-muted-foreground">(optional)</span>
+                    </Label>
+                    <Input
+                      id="edit-class-room"
+                      placeholder="e.g., Room 304, Lab 2B"
+                      value={editRoom}
+                      onChange={(e) => setEditRoom(e.target.value)}
+                      disabled={isSavingSettings}
+                    />
+                  </div>
                 </div>
+
+                {/* Schedule Time Pickers */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="edit-class-desc" className="text-xs font-medium">
-                    Description <span className="text-[10px] text-muted-foreground">(optional)</span>
-                  </Label>
-                  <Input
-                    id="edit-class-desc"
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    disabled={isSavingSettings}
-                  />
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-medium flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5 text-primary" />
+                      <span>Class Schedule Time</span>
+                      <span className="text-[10px] text-muted-foreground font-normal">(optional)</span>
+                    </Label>
+                    {(editStartTime || editEndTime) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditStartTime('');
+                          setEditEndTime('');
+                        }}
+                        className="text-[10px] text-muted-foreground hover:text-destructive cursor-pointer transition-colors"
+                      >
+                        Clear time
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 items-center">
+                    <div className="space-y-1">
+                      <Label htmlFor="edit-class-start-time" className="text-[11px] text-muted-foreground">
+                        Start Time
+                      </Label>
+                      <Input
+                        id="edit-class-start-time"
+                        type="time"
+                        value={editStartTime}
+                        onChange={(e) => setEditStartTime(e.target.value)}
+                        disabled={isSavingSettings}
+                        className="text-xs cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label htmlFor="edit-class-end-time" className="text-[11px] text-muted-foreground">
+                        End Time
+                      </Label>
+                      <Input
+                        id="edit-class-end-time"
+                        type="time"
+                        value={editEndTime}
+                        onChange={(e) => setEditEndTime(e.target.value)}
+                        disabled={isSavingSettings}
+                        className="text-xs cursor-pointer"
+                      />
+                    </div>
+                  </div>
                 </div>
+
+                {/* Schedule Days Tag List */}
+                <ScheduleDaysPicker
+                  selectedDays={editDays}
+                  onChange={setEditDays}
+                  disabled={isSavingSettings}
+                />
+
+                {/* Class Card Color Theme */}
+                <ClassColorPicker
+                  selectedColor={editColor}
+                  onChange={setEditColor}
+                  disabled={isSavingSettings}
+                />
+
                 <Button type="submit" disabled={isSavingSettings || !editName.trim()} className="cursor-pointer">
                   {isSavingSettings ? (
                     <>

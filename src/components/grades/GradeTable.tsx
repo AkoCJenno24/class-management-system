@@ -367,7 +367,8 @@ export function GradeTable({ grades, students, classId }: GradeTableProps) {
           </div>
         ) : (
           <Card className="border-border shadow-xs overflow-hidden">
-            <Table>
+            <div className="overflow-x-auto touch-scroll">
+              <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Student</TableHead>
@@ -452,7 +453,8 @@ export function GradeTable({ grades, students, classId }: GradeTableProps) {
                 })}
               </TableBody>
             </Table>
-          </Card>
+          </div>
+        </Card>
         )}
       </div>
 

@@ -1,9 +1,10 @@
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { AVATAR_PRESETS, type StudentStatus } from '@/types';
-import { getInitials, cn } from '@/lib/utils';
+import { useState, useEffect } from 'react';
+import type { StudentStatus } from '@/types';
+import { resolveAvatarSource, cn } from '@/lib/utils';
 
 interface StudentAvatarProps {
   student?: {
+    id?: string;
     firstName: string;
     lastName: string;
     avatarUrl?: string | null;
@@ -11,6 +12,7 @@ interface StudentAvatarProps {
     avatarColor?: string | null;
     status?: StudentStatus;
   } | null;
+  id?: string;
   firstName?: string;
   lastName?: string;
   avatarUrl?: string | null;
@@ -40,18 +42,38 @@ const statusDotSizes = {
 
 export function StudentAvatar({
   student,
+  id = student?.id,
   firstName = student?.firstName || '',
   lastName = student?.lastName || '',
   avatarUrl = student?.avatarUrl,
   avatarPreset = student?.avatarPreset,
-  avatarColor = student?.avatarColor || '#6366F1',
+  avatarColor = student?.avatarColor,
   status = student?.status || 'active',
   size = 'default',
   className,
   showStatusIndicator = false,
 }: StudentAvatarProps) {
-  const presetObj = avatarPreset ? AVATAR_PRESETS.find((p) => p.id === avatarPreset) : null;
-  const imageSrc = avatarUrl || presetObj?.src;
+  const [imageError, setImageError] = useState(false);
+
+  const effectiveAvatarUrl = avatarUrl ?? student?.avatarUrl;
+  const effectiveAvatarPreset = avatarPreset ?? student?.avatarPreset;
+  const effectiveAvatarColor = avatarColor ?? student?.avatarColor;
+
+  // Reset image error state whenever avatar URL or preset prop changes
+  useEffect(() => {
+    setImageError(false);
+  }, [effectiveAvatarUrl, effectiveAvatarPreset]);
+
+  const resolved = resolveAvatarSource({
+    avatarUrl: effectiveAvatarUrl,
+    avatarPreset: effectiveAvatarPreset,
+    avatarColor: effectiveAvatarColor,
+    firstName,
+    lastName,
+    id,
+  });
+
+  const showImage = !imageError && (resolved.mode === 'photo' || resolved.mode === 'preset');
 
   const getStatusColor = () => {
     switch (status) {
@@ -74,26 +96,36 @@ export function StudentAvatar({
 
   return (
     <div className="relative inline-flex shrink-0">
-      <Avatar className={cn(sizeClasses[size], 'overflow-hidden rounded-full shadow-2xs', className)}>
-        {imageSrc ? (
-          <AvatarImage
-            src={imageSrc}
+      <div
+        className={cn(
+          sizeClasses[size],
+          'relative flex items-center justify-center rounded-full overflow-hidden shrink-0 select-none shadow-2xs ring-1 ring-border/40',
+          className
+        )}
+        style={{
+          backgroundColor: showImage ? 'transparent' : resolved.bgColor,
+        }}
+      >
+        {showImage && resolved.src ? (
+          <img
+            src={resolved.src}
             alt={`${firstName} ${lastName}`}
-            className="h-full w-full object-cover rounded-full"
+            loading="lazy"
+            decoding="async"
+            onError={() => setImageError(true)}
+            className="h-full w-full object-cover rounded-full select-none pointer-events-none"
           />
-        ) : null}
-        <AvatarFallback
-          className="rounded-full text-white font-bold"
-          style={{ backgroundColor: avatarColor || '#6366F1' }}
-        >
-          {getInitials(firstName, lastName)}
-        </AvatarFallback>
-      </Avatar>
+        ) : (
+          <span className="font-bold text-white leading-none tracking-tight select-none">
+            {resolved.initials}
+          </span>
+        )}
+      </div>
 
       {showStatusIndicator && (
         <span
           className={cn(
-            'absolute bottom-0 right-0 rounded-full ring-background shadow-xs',
+            'absolute bottom-0 right-0 rounded-full ring-background shadow-xs pointer-events-none',
             statusDotSizes[size],
             getStatusColor()
           )}

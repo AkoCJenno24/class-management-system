@@ -271,163 +271,252 @@ export function StudentsPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card className="border-border shadow-xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[280px]">Student</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Student ID</TableHead>
-                  <TableHead>Grade Level</TableHead>
-                  <TableHead>Contact / Guardian</TableHead>
-                  <TableHead>Enrolled Classes</TableHead>
-                  <TableHead>Added</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredStudents.map((student) => {
-                  const fullName = formatStudentFullName(student);
-                  const hasContactInfo = student.email || student.phone || student.parentGuardian;
+        <>
+          {/* Mobile Card View (shown on screen < md) */}
+          <div className="grid grid-cols-1 gap-3 md:hidden">
+            {filteredStudents.map((student) => {
+              const fullName = formatStudentFullName(student);
+              return (
+                <Card key={student.id} className="p-4 border-border shadow-xs space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <StudentAvatar student={student} size="default" showStatusIndicator />
+                      <div className="min-w-0">
+                        <h4 className="font-semibold text-sm text-foreground truncate">
+                          {fullName}
+                        </h4>
+                        <p className="text-xs text-muted-foreground font-mono">
+                          {student.studentId ? `ID: ${student.studentId}` : 'No ID'}
+                          {student.gradeLevel ? ` • ${student.gradeLevel}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <StudentStatusBadge status={student.status} className="shrink-0 text-[11px]" />
+                  </div>
 
-                  return (
-                    <TableRow key={student.id}>
-                      {/* Student Avatar and Full Name */}
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <StudentAvatar student={student} size="default" showStatusIndicator />
-                          <div className="flex flex-col min-w-0">
-                            <span className="font-semibold text-foreground truncate max-w-[200px]">
-                              {fullName}
-                            </span>
-                            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                              {student.gender && <span>{student.gender}</span>}
-                              {student.gender && student.dateOfBirth && <span>•</span>}
-                              {student.dateOfBirth && (
-                                <span className="flex items-center gap-0.5">
-                                  <Calendar className="h-3 w-3" />
-                                  {formatDate(student.dateOfBirth)}
-                                </span>
-                              )}
+                  {/* Contact / Guardian Chips */}
+                  {(student.parentGuardian || student.email || student.phone) && (
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/60 text-xs text-muted-foreground">
+                      {student.parentGuardian && (
+                        <span className="flex items-center gap-1">
+                          <UserCheck className="h-3 w-3 text-primary shrink-0" />
+                          <span>{student.parentGuardian}</span>
+                        </span>
+                      )}
+                      {student.email && (
+                        <a href={`mailto:${student.email}`} className="flex items-center gap-1 text-primary hover:underline">
+                          <Mail className="h-3 w-3 shrink-0" />
+                          <span className="truncate max-w-[140px]">{student.email}</span>
+                        </a>
+                      )}
+                      {student.phone && (
+                        <a href={`tel:${student.phone}`} className="flex items-center gap-1 text-primary hover:underline">
+                          <Phone className="h-3 w-3 shrink-0" />
+                          <span>{student.phone}</span>
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Enrolled Classes and Actions */}
+                  <div className="flex items-center justify-between pt-2 border-t border-border/60 gap-2">
+                    <div className="flex flex-wrap gap-1 min-w-0">
+                      {student.classIds.length === 0 ? (
+                        <span className="text-[11px] text-muted-foreground italic">No classes</span>
+                      ) : (
+                        student.classIds.map((cid) => (
+                          <Badge key={cid} variant="outline" className="text-[10px] px-1.5 py-0">
+                            {classMap.get(cid) || 'Class'}
+                          </Badge>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setEditingStudent(student)}
+                      >
+                        <Pencil className="h-3 w-3 mr-1" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10"
+                        onClick={() => setStudentToDelete(student)}
+                      >
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* Desktop/Tablet Table View (shown on md+) */}
+          <Card className="hidden md:block border-border shadow-xs overflow-hidden">
+            <div className="overflow-x-auto touch-scroll">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="w-[280px]">Student</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Student ID</TableHead>
+                    <TableHead>Grade Level</TableHead>
+                    <TableHead>Contact / Guardian</TableHead>
+                    <TableHead>Enrolled Classes</TableHead>
+                    <TableHead>Added</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredStudents.map((student) => {
+                    const fullName = formatStudentFullName(student);
+                    const hasContactInfo = student.email || student.phone || student.parentGuardian;
+
+                    return (
+                      <TableRow key={student.id}>
+                        {/* Student Avatar and Full Name */}
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <StudentAvatar student={student} size="default" showStatusIndicator />
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-semibold text-foreground truncate max-w-[200px]">
+                                {fullName}
+                              </span>
+                              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                {student.gender && <span>{student.gender}</span>}
+                                {student.gender && student.dateOfBirth && <span>•</span>}
+                                {student.dateOfBirth && (
+                                  <span className="flex items-center gap-0.5">
+                                    <Calendar className="h-3 w-3" />
+                                    {formatDate(student.dateOfBirth)}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </TableCell>
+                        </TableCell>
 
-                      {/* Status Badge */}
-                      <TableCell>
-                        <StudentStatusBadge status={student.status} />
-                      </TableCell>
+                        {/* Status Badge */}
+                        <TableCell>
+                          <StudentStatusBadge status={student.status} />
+                        </TableCell>
 
-                      {/* Student ID */}
-                      <TableCell className="text-muted-foreground font-mono text-xs">
-                        {student.studentId || '—'}
-                      </TableCell>
+                        {/* Student ID */}
+                        <TableCell className="text-muted-foreground font-mono text-xs">
+                          {student.studentId || '—'}
+                        </TableCell>
 
-                      {/* Grade Level Badge */}
-                      <TableCell>
-                        {student.gradeLevel ? (
-                          <Badge
-                            variant="secondary"
-                            className="font-medium text-xs border border-primary/20 bg-primary/5 text-primary"
-                          >
-                            <GraduationCap className="mr-1 h-3 w-3 shrink-0" />
-                            {student.gradeLevel}
-                          </Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground italic">Not set</span>
-                        )}
-                      </TableCell>
+                        {/* Grade Level Badge */}
+                        <TableCell>
+                          {student.gradeLevel ? (
+                            <Badge
+                              variant="secondary"
+                              className="font-medium text-xs border border-primary/20 bg-primary/5 text-primary"
+                            >
+                              <GraduationCap className="mr-1 h-3 w-3 shrink-0" />
+                              {student.gradeLevel}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">Not set</span>
+                          )}
+                        </TableCell>
 
-                      {/* Contact / Guardian */}
-                      <TableCell>
-                        {hasContactInfo ? (
-                          <div className="flex flex-col gap-0.5 text-xs text-muted-foreground max-w-[200px]">
-                            {student.parentGuardian && (
-                              <span className="font-medium text-foreground flex items-center gap-1 truncate" title={`Parent/Guardian: ${student.parentGuardian}`}>
-                                <UserCheck className="h-3 w-3 text-primary shrink-0" />
-                                {student.parentGuardian}
-                              </span>
-                            )}
-                            {student.email && (
-                              <a
-                                href={`mailto:${student.email}`}
-                                className="flex items-center gap-1 hover:text-primary hover:underline truncate"
-                                title={student.email}
-                              >
-                                <Mail className="h-3 w-3 shrink-0" />
-                                {student.email}
-                              </a>
-                            )}
-                            {student.phone && (
-                              <a
-                                href={`tel:${student.phone}`}
-                                className="flex items-center gap-1 hover:text-primary hover:underline truncate"
-                                title={student.phone}
-                              >
-                                <Phone className="h-3 w-3 shrink-0" />
-                                {student.phone}
-                              </a>
+                        {/* Contact / Guardian */}
+                        <TableCell>
+                          {hasContactInfo ? (
+                            <div className="flex flex-col gap-0.5 text-xs text-muted-foreground max-w-[200px]">
+                              {student.parentGuardian && (
+                                <span className="font-medium text-foreground flex items-center gap-1 truncate" title={`Parent/Guardian: ${student.parentGuardian}`}>
+                                  <UserCheck className="h-3 w-3 text-primary shrink-0" />
+                                  {student.parentGuardian}
+                                </span>
+                              )}
+                              {student.email && (
+                                <a
+                                  href={`mailto:${student.email}`}
+                                  className="flex items-center gap-1 hover:text-primary hover:underline truncate"
+                                  title={student.email}
+                                >
+                                  <Mail className="h-3 w-3 shrink-0" />
+                                  {student.email}
+                                </a>
+                              )}
+                              {student.phone && (
+                                <a
+                                  href={`tel:${student.phone}`}
+                                  className="flex items-center gap-1 hover:text-primary hover:underline truncate"
+                                  title={student.phone}
+                                >
+                                  <Phone className="h-3 w-3 shrink-0" />
+                                  {student.phone}
+                                </a>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">No contact info</span>
+                          )}
+                        </TableCell>
+
+                        {/* Enrolled Classes */}
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1 max-w-[180px]">
+                            {student.classIds.length === 0 ? (
+                              <span className="text-xs text-muted-foreground italic">None</span>
+                            ) : (
+                              student.classIds.map((cid) => (
+                                <Badge key={cid} variant="outline" className="text-xs font-normal">
+                                  {classMap.get(cid) || 'Class'}
+                                </Badge>
+                              ))
                             )}
                           </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground italic">No contact info</span>
-                        )}
-                      </TableCell>
+                        </TableCell>
 
-                      {/* Enrolled Classes */}
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1 max-w-[180px]">
-                          {student.classIds.length === 0 ? (
-                            <span className="text-xs text-muted-foreground italic">None</span>
-                          ) : (
-                            student.classIds.map((cid) => (
-                              <Badge key={cid} variant="outline" className="text-xs font-normal">
-                                {classMap.get(cid) || 'Class'}
-                              </Badge>
-                            ))
-                          )}
-                        </div>
-                      </TableCell>
+                        {/* Date Added */}
+                        <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                          {formatDate(student.createdAt)}
+                        </TableCell>
 
-                      {/* Date Added */}
-                      <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
-                        {formatDate(student.createdAt)}
-                      </TableCell>
-
-                      {/* Actions */}
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
-                            onClick={() => setEditingStudent(student)}
-                            title="Edit student"
-                          >
-                            <Pencil className="h-4 w-4" />
-                            <span className="sr-only">Edit</span>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:bg-destructive/10 cursor-pointer"
-                            onClick={() => setStudentToDelete(student)}
-                            title="Delete student"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            <span className="sr-only">Delete</span>
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </Card>
+                        {/* Actions */}
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
+                              onClick={() => setEditingStudent(student)}
+                              title="Edit student"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              <span className="sr-only">Edit</span>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:bg-destructive/10 cursor-pointer"
+                              onClick={() => setStudentToDelete(student)}
+                              title="Delete student"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span className="sr-only">Delete</span>
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </>
       )}
 
       {/* Dialogs */}

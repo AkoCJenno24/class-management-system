@@ -1,6 +1,7 @@
 /**
  * Create Class dialog — form to create a new class.
  * Real-time auto-validation for required class fields.
+ * Includes optional room number, start/end time pickers, and schedule days tag list.
  */
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,8 +17,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ScheduleDaysPicker } from './ScheduleDaysPicker';
+import { ClassColorPicker } from './ClassColorPicker';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, DoorOpen, Clock } from 'lucide-react';
+import type { ClassColor } from '@/types';
 import { autoCapitalizeSentences } from '@/lib/utils';
 
 interface CreateClassDialogProps {
@@ -29,7 +33,11 @@ export function CreateClassDialog({ open, onOpenChange }: CreateClassDialogProps
   const { user } = useAuth();
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('');
-  const [description, setDescription] = useState('');
+  const [room, setRoom] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [days, setDays] = useState<string[]>([]);
+  const [color, setColor] = useState<ClassColor>('default');
   const [error, setError] = useState('');
   const [touched, setTouched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -52,6 +60,18 @@ export function CreateClassDialog({ open, onOpenChange }: CreateClassDialogProps
     setError(validateName(name));
   };
 
+  const handleReset = () => {
+    setName('');
+    setSubject('');
+    setRoom('');
+    setStartTime('');
+    setEndTime('');
+    setDays([]);
+    setColor('default');
+    setError('');
+    setTouched(false);
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setTouched(true);
@@ -70,14 +90,14 @@ export function CreateClassDialog({ open, onOpenChange }: CreateClassDialogProps
       await createClass(user.uid, {
         name: cleanName,
         subject: autoCapitalizeSentences(subject.trim()),
-        description: autoCapitalizeSentences(description.trim()),
+        room: room.trim(),
+        startTime: startTime.trim(),
+        endTime: endTime.trim(),
+        days,
+        color,
       });
       toast.success(`Class "${cleanName}" created!`);
-      setName('');
-      setSubject('');
-      setDescription('');
-      setError('');
-      setTouched(false);
+      handleReset();
       onOpenChange(false);
     } catch {
       toast.error('Failed to create class. Please try again.');
@@ -91,24 +111,21 @@ export function CreateClassDialog({ open, onOpenChange }: CreateClassDialogProps
       open={open}
       onOpenChange={(next) => {
         if (!next) {
-          setName('');
-          setSubject('');
-          setDescription('');
-          setError('');
-          setTouched(false);
+          handleReset();
         }
         onOpenChange(next);
       }}
     >
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Create New Class</DialogTitle>
           <DialogDescription>
-            Add a new class to manage students and grades.
+            Add a new class workspace with room details and schedule times.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+          {/* Class Name */}
           <div className="space-y-1.5">
             <Label htmlFor="class-name" className="text-xs font-medium">
               Class Name <span className="text-destructive">*</span>
@@ -129,31 +146,103 @@ export function CreateClassDialog({ open, onOpenChange }: CreateClassDialogProps
             )}
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="class-subject" className="text-xs font-medium">
-              Subject <span className="text-[10px] text-muted-foreground">(optional)</span>
-            </Label>
-            <Input
-              id="class-subject"
-              placeholder="e.g., Mathematics, Science"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              disabled={isLoading}
-            />
+          {/* Row: Subject & Room Number */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="class-subject" className="text-xs font-medium">
+                Subject <span className="text-[10px] text-muted-foreground">(optional)</span>
+              </Label>
+              <Input
+                id="class-subject"
+                placeholder="e.g., Mathematics, Science"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                disabled={isLoading}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="class-room" className="text-xs font-medium flex items-center gap-1">
+                <DoorOpen className="h-3.5 w-3.5 text-primary" />
+                <span>Room Number</span>
+                <span className="text-[10px] text-muted-foreground">(optional)</span>
+              </Label>
+              <Input
+                id="class-room"
+                placeholder="e.g., Room 304, Lab 2B"
+                value={room}
+                onChange={(e) => setRoom(e.target.value)}
+                disabled={isLoading}
+              />
+            </div>
           </div>
 
+          {/* Schedule Time Pickers (Start Time & End Time) */}
           <div className="space-y-1.5">
-            <Label htmlFor="class-description" className="text-xs font-medium">
-              Description <span className="text-[10px] text-muted-foreground">(optional)</span>
-            </Label>
-            <Input
-              id="class-description"
-              placeholder="e.g., Period 1 • Room 204"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              disabled={isLoading}
-            />
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-medium flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5 text-primary" />
+                <span>Class Schedule Time</span>
+                <span className="text-[10px] text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              {(startTime || endTime) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStartTime('');
+                    setEndTime('');
+                  }}
+                  className="text-[10px] text-muted-foreground hover:text-destructive cursor-pointer transition-colors"
+                >
+                  Clear time
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 items-center">
+              <div className="space-y-1">
+                <Label htmlFor="class-start-time" className="text-[11px] text-muted-foreground">
+                  Start Time
+                </Label>
+                <Input
+                  id="class-start-time"
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  disabled={isLoading}
+                  className="text-xs cursor-pointer"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="class-end-time" className="text-[11px] text-muted-foreground">
+                  End Time
+                </Label>
+                <Input
+                  id="class-end-time"
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  disabled={isLoading}
+                  className="text-xs cursor-pointer"
+                />
+              </div>
+            </div>
           </div>
+
+          {/* Schedule Days Tag List */}
+          <ScheduleDaysPicker
+            selectedDays={days}
+            onChange={setDays}
+            disabled={isLoading}
+          />
+
+          {/* Class Card Color Theme */}
+          <ClassColorPicker
+            selectedColor={color}
+            onChange={setColor}
+            disabled={isLoading}
+          />
 
           <DialogFooter className="pt-2">
             <Button

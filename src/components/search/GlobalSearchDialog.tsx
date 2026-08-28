@@ -30,9 +30,11 @@ import {
   Settings,
   PlusCircle,
   ArrowRight,
+  Pin,
 } from 'lucide-react';
+import { CLASS_COLOR_CONFIGS } from '@/components/classes/ClassColorPicker';
 import type { StickyNoteColor, TodoPriority } from '@/types';
-import { formatStudentFullName } from '@/lib/utils';
+import { formatStudentFullName, formatClassSchedule } from '@/lib/utils';
 
 interface GlobalSearchDialogProps {
   open: boolean;
@@ -97,7 +99,7 @@ export function GlobalSearchDialog({
         onValueChange={setSearchQuery}
       />
 
-      <CommandList className="max-h-[380px] p-2 overflow-y-auto">
+      <CommandList className="max-h-[min(380px,70dvh)] p-2 overflow-y-auto touch-scroll">
         <CommandEmpty className="py-10 text-center text-sm text-muted-foreground">
           <p className="font-medium text-foreground">No matching results found</p>
           <p className="text-xs text-muted-foreground mt-1">
@@ -108,33 +110,52 @@ export function GlobalSearchDialog({
         {/* ─── 1. Classes ─── */}
         {classes.length > 0 && (
           <CommandGroup heading="Classes" className="capitalize">
-            {classes.map((cls) => (
-              <CommandItem
-                key={cls.id}
-                value={`class ${cls.name} ${cls.subject} ${cls.description || ''}`}
-                onSelect={() => handleSelect(() => navigate(`/classes/${cls.id}`))}
-                className="flex items-center justify-between gap-3 p-2 rounded-lg cursor-pointer hover:bg-accent transition-colors"
-              >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary border border-primary/20">
-                    <School className="h-4 w-4" />
+            {classes.map((cls) => {
+              const schedule = formatClassSchedule(cls.days, cls.startTime, cls.endTime);
+              const daysStr = cls.days?.join(' ') || '';
+              const colorConfig = CLASS_COLOR_CONFIGS[cls.color || 'default'] || CLASS_COLOR_CONFIGS.default;
+
+              return (
+                <CommandItem
+                  key={cls.id}
+                  value={`class ${cls.name} ${cls.subject} ${cls.room || ''} ${daysStr} ${schedule} ${cls.color || ''}`}
+                  onSelect={() => handleSelect(() => navigate(`/classes/${cls.id}`))}
+                  className="flex items-center justify-between gap-3 p-2 rounded-lg cursor-pointer hover:bg-accent transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-primary"
+                      style={{
+                        backgroundColor: `${colorConfig.swatchColor}18`,
+                        borderColor: `${colorConfig.swatchColor}40`,
+                        color: colorConfig.swatchColor,
+                      }}
+                    >
+                      <School className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-semibold truncate text-foreground leading-tight">{cls.name}</p>
+                        {cls.isPinned && (
+                          <Pin className="h-3 w-3 text-primary fill-current shrink-0" />
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">
+                        {cls.subject || 'General Class'}
+                        {cls.room ? ` • ${cls.room}` : ''}
+                        {schedule ? ` • ${schedule}` : ''}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold truncate text-foreground leading-tight">{cls.name}</p>
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">
-                      {cls.subject || 'General Class'}
-                      {cls.description ? ` • ${cls.description}` : ''}
-                    </p>
+                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    <Badge variant="secondary" className="text-[11px] font-medium font-mono whitespace-nowrap">
+                      {cls.studentCount ?? 0} {cls.studentCount === 1 ? 'student' : 'students'}
+                    </Badge>
+                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-60" />
                   </div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                  <Badge variant="secondary" className="text-[11px] font-medium font-mono whitespace-nowrap">
-                    {cls.studentCount ?? 0} {cls.studentCount === 1 ? 'student' : 'students'}
-                  </Badge>
-                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-60" />
-                </div>
-              </CommandItem>
-            ))}
+                </CommandItem>
+              );
+            })}
           </CommandGroup>
         )}
 

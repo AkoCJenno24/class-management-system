@@ -515,9 +515,9 @@ export function TodoListBoard({ todos }: TodoListBoardProps) {
 
   return (
     <div className="space-y-4">
-      {/* ─── Header & Summary Card ─── */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-2">
+      {/* ─── Header ─── */}
+      <div className="space-y-1">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-base font-semibold tracking-tight flex items-center gap-2">
             <ListTodo className="h-5 w-5 text-primary shrink-0" />
             <span>To-Do List</span>
@@ -545,9 +545,6 @@ export function TodoListBoard({ todos }: TodoListBoardProps) {
             </Button>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Track lesson plans, grading deadlines, and meetings.
-        </p>
       </div>
 
       {/* ─── Progress Bar & Quick Stats ─── */}
@@ -588,8 +585,8 @@ export function TodoListBoard({ todos }: TodoListBoardProps) {
           />
         </div>
 
-        <div className="flex items-center gap-1.5 justify-between pt-1.5 border-t border-border/60">
-          <div className="flex items-center gap-1 flex-1 min-w-0">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 justify-between pt-1.5 border-t border-border/60">
+          <div className="flex items-center gap-1 flex-1 min-w-[180px]">
             {/* Quick Category */}
             <Select
               value={quickCategory}
@@ -628,19 +625,19 @@ export function TodoListBoard({ todos }: TodoListBoardProps) {
             type="submit"
             size="sm"
             disabled={isQuickAdding || !quickTitle.trim()}
-            className="h-7 px-2.5 text-xs shrink-0 cursor-pointer"
+            className="h-7 px-2.5 text-xs shrink-0 cursor-pointer w-full sm:w-auto"
           >
             {isQuickAdding ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Add'}
           </Button>
         </div>
       </form>
 
-      {/* ─── Filter Tabs ─── */}
-      <div className="flex flex-wrap items-center gap-1 border-b border-border pb-2 text-[11px]">
+      {/* ─── Filter Tabs (Horizontal scrolling on mobile) ─── */}
+      <div className="flex items-center gap-1 border-b border-border pb-2 text-[11px] overflow-x-auto scrollbar-none flex-nowrap sm:flex-wrap">
         <button
           type="button"
           onClick={() => setActiveTab('all')}
-          className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
+          className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer whitespace-nowrap ${
             activeTab === 'all'
               ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
               : 'text-muted-foreground hover:text-foreground hover:bg-muted'

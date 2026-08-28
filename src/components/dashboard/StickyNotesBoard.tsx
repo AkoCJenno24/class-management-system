@@ -352,16 +352,16 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
     <div className="space-y-4">
       {/* ─── Header ─── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h3 className="text-base font-semibold tracking-tight flex items-center gap-2">
-            <NoteIcon className="h-4 w-4 text-primary" />
-            Teacher's Sticky Notes & Quick Reminders
+            <NoteIcon className="h-4 w-4 text-primary shrink-0" />
+            <span className="truncate">Teacher's Sticky Notes & Reminders</span>
           </h3>
           <p className="text-xs text-muted-foreground">
             Personal blackboard for reminders and teaching notes. Drag unpinned cards to reorder.
           </p>
         </div>
-        <Button onClick={handleOpenCreate} size="sm" className="self-start sm:self-auto cursor-pointer shadow-xs">
+        <Button onClick={handleOpenCreate} size="sm" className="w-full sm:w-auto shrink-0 cursor-pointer shadow-xs">
           <Plus className="mr-1.5 h-4 w-4" />
           Add Sticky Note
         </Button>
@@ -370,7 +370,7 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
       {/* ─── Notes Grid ─── */}
       {visibleItems.length === 0 ? (
         <Card className="border-dashed shadow-xs">
-          <CardContent className="flex flex-col items-center justify-center py-10 text-center p-6">
+          <CardContent className="flex flex-col items-center justify-center py-10 text-center p-4 sm:p-6">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 mb-3">
               <NoteIcon className="h-6 w-6" />
             </div>
@@ -402,7 +402,7 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
                 onDragLeave={(e) => handleDragLeave(e, note)}
                 onDrop={(e) => handleDrop(e, note)}
                 onDragEnd={handleDragEnd}
-                className={`group relative flex flex-col justify-between rounded-xl border p-4 shadow-xs transition-all duration-200 select-none ${
+                className={`group relative flex flex-col justify-between rounded-xl border p-3.5 sm:p-4 shadow-xs transition-all duration-200 select-none min-w-0 ${
                   isDraggable
                     ? 'cursor-grab active:cursor-grabbing hover:shadow-md'
                     : 'cursor-default'
@@ -417,14 +417,14 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
                 } ${config.bgClass}`}
               >
                 {/* Note Header & Top Controls */}
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-start justify-between gap-2 mb-1.5">
                     <div className="flex items-start gap-1.5 min-w-0 flex-1">
                       {isDraggable && (
                         <GripVertical className="h-4 w-4 opacity-30 group-hover:opacity-70 mt-0.5 shrink-0 transition-opacity" />
                       )}
                       <div className="min-w-0 flex-1">
-                        <h4 className="font-bold text-sm leading-snug line-clamp-2">
+                        <h4 className="font-bold text-sm leading-snug line-clamp-2 break-words">
                           {note.title}
                         </h4>
                         <span className="text-[10px] opacity-70 block mt-0.5">
@@ -450,22 +450,22 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
 
                   {/* Note Content Body */}
                   {note.content && (
-                    <p className="text-xs leading-relaxed whitespace-pre-wrap line-clamp-6 opacity-90 font-normal mt-1">
+                    <p className="text-xs leading-relaxed whitespace-pre-wrap line-clamp-6 opacity-90 font-normal mt-1 break-words">
                       {note.content}
                     </p>
                   )}
                 </div>
 
                 {/* Note Footer: Color swatches & Actions */}
-                <div className="flex items-center justify-between border-t border-black/10 dark:border-white/10 pt-2.5 mt-3 text-[11px] opacity-80">
+                <div className="flex items-center justify-between border-t border-black/10 dark:border-white/10 pt-2.5 mt-3 text-[11px] opacity-80 gap-2">
                   {/* Quick Color Swatches */}
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 flex-wrap">
                     {COLOR_KEYS.map((colKey) => (
                       <button
                         key={colKey}
                         type="button"
                         onClick={() => handleChangeColor(note, colKey)}
-                        className={`h-3.5 w-3.5 rounded-full border transition-transform ${COLOR_CONFIGS[colKey].dotColor} ${
+                        className={`h-3.5 w-3.5 rounded-full border transition-transform shrink-0 ${COLOR_CONFIGS[colKey].dotColor} ${
                           note.color === colKey ? 'scale-125 ring-2 ring-primary ring-offset-1' : 'hover:scale-110 opacity-70 hover:opacity-100'
                         }`}
                         title={`Change to ${COLOR_CONFIGS[colKey].name}`}
@@ -474,7 +474,7 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
                   </div>
 
                   {/* Action Icons */}
-                  <div className="flex items-center gap-0.5">
+                  <div className="flex items-center gap-0.5 shrink-0">
                     <button
                       type="button"
                       onClick={() => handleOpenEdit(note)}

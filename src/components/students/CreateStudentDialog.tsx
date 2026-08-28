@@ -31,7 +31,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { toast } from 'sonner';
 import {
   Loader2,
@@ -51,7 +50,7 @@ import {
   STUDENT_GENDER_OPTIONS,
   type StudentStatus,
 } from '@/types';
-import { capitalizeFirst, getInitials } from '@/lib/utils';
+import { capitalizeFirst, getInitials, getDeterministicAvatarColor, resolveAvatarSource } from '@/lib/utils';
 
 interface CreateStudentDialogProps {
   open: boolean;
@@ -272,7 +271,7 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
         lastName: cleanLast,
         suffix: cleanSuffix,
         avatarUrl: finalAvatarUrl,
-        avatarPreset: avatarPreset || null,
+        avatarPreset: finalAvatarUrl ? null : (avatarPreset || null),
         avatarColor,
         dateOfBirth: dateOfBirth.trim() || null,
         gender: gender.trim() || null,
@@ -341,52 +340,70 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
               <div className="p-3 rounded-xl border border-border/80 bg-gradient-to-r from-muted/30 via-muted/20 to-background">
                 <div className="flex items-center gap-3.5">
                   {/* Avatar Preview */}
-                  <div className="relative group shrink-0">
-                    <div
-                      onClick={() => fileInputRef.current?.click()}
-                      className="cursor-pointer rounded-full p-0.5 ring-2 ring-primary/30 hover:ring-primary/70 transition-all"
-                      title="Upload photo"
-                    >
-                      <Avatar className="h-13 w-13 rounded-full shadow-xs bg-muted overflow-hidden">
-                        {avatarUrl ? (
-                          <AvatarImage src={avatarUrl} alt="Avatar" className="object-cover h-full w-full" />
-                        ) : selectedPresetObj ? (
-                          <AvatarImage src={selectedPresetObj.src} alt="Avatar" className="object-cover h-full w-full" />
-                        ) : null}
-                        <AvatarFallback
-                          className="rounded-full text-sm font-bold text-white"
-                          style={{ backgroundColor: avatarColor }}
+                  {(() => {
+                    const resolved = resolveAvatarSource({
+                      avatarUrl,
+                      avatarPreset,
+                      avatarColor,
+                      firstName: firstName || 'Student',
+                      lastName,
+                    });
+                    const showImage = resolved.mode === 'photo' || resolved.mode === 'preset';
+
+                    return (
+                      <div className="relative group shrink-0">
+                        <div
+                          onClick={() => fileInputRef.current?.click()}
+                          className="cursor-pointer rounded-full p-0.5 ring-2 ring-primary/30 hover:ring-primary/70 transition-all"
+                          title="Upload photo"
                         >
-                          {getInitials(firstName || 'S', lastName || '')}
-                        </AvatarFallback>
-                      </Avatar>
+                          <div
+                            className="h-13 w-13 rounded-full shadow-xs overflow-hidden flex items-center justify-center select-none ring-1 ring-border/40 relative"
+                            style={{
+                              backgroundColor: !showImage ? resolved.bgColor : 'transparent',
+                            }}
+                          >
+                            {showImage && resolved.src ? (
+                              <img
+                                src={resolved.src}
+                                alt="Avatar"
+                                className="object-cover h-full w-full rounded-full relative z-10"
+                              />
+                            ) : (
+                              <span className="text-sm font-bold text-white select-none">
+                                {resolved.initials}
+                              </span>
+                            )}
+                          </div>
 
-                      <div className="absolute inset-0.5 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
-                        {isProcessingAvatar ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Camera className="h-3.5 w-3.5" />
-                        )}
+                          <div className="absolute inset-0.5 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity z-20">
+                            {isProcessingAvatar ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Camera className="h-3.5 w-3.5" />
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xs hover:scale-105 active:scale-95 transition-all ring-1.5 ring-background cursor-pointer"
+                          title="Upload photo"
+                        >
+                          <Camera className="h-2.5 w-2.5" />
+                        </button>
+
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/png,image/jpeg,image/jpg,image/webp"
+                          onChange={handleAvatarFileSelect}
+                          className="hidden"
+                        />
                       </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xs hover:scale-105 active:scale-95 transition-all ring-1.5 ring-background cursor-pointer"
-                      title="Upload photo"
-                    >
-                      <Camera className="h-2.5 w-2.5" />
-                    </button>
-
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/png,image/jpeg,image/jpg,image/webp"
-                      onChange={handleAvatarFileSelect}
-                      className="hidden"
-                    />
-                  </div>
+                    );
+                  })()}
 
                   {/* Preset Options & Color Palette */}
                   <div className="space-y-1.5 flex-1 min-w-0">
@@ -464,8 +481,8 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
               </div>
 
               {/* Row 1: Name Fields (First, Middle, Last, Suffix) */}
-              <div className="grid grid-cols-12 gap-2.5 items-start">
-                <div className="col-span-4 space-y-1">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-start">
+                <div className="sm:col-span-4 space-y-1">
                   <Label htmlFor="student-first-name" className="text-xs font-medium">
                     First Name <span className="text-destructive">*</span>
                   </Label>
@@ -487,7 +504,7 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
                   )}
                 </div>
 
-                <div className="col-span-3 space-y-1">
+                <div className="sm:col-span-3 space-y-1">
                   <Label htmlFor="student-middle-name" className="text-xs font-medium text-muted-foreground">
                     Middle Name <span className="text-[10px]">(opt)</span>
                   </Label>
@@ -501,7 +518,7 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
                   />
                 </div>
 
-                <div className="col-span-3 space-y-1">
+                <div className="sm:col-span-3 space-y-1">
                   <Label htmlFor="student-last-name" className="text-xs font-medium">
                     Last Name <span className="text-destructive">*</span>
                   </Label>
@@ -522,7 +539,7 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
                   )}
                 </div>
 
-                <div className="col-span-2 space-y-1">
+                <div className="sm:col-span-2 space-y-1">
                   <Label htmlFor="student-suffix" className="text-xs font-medium text-muted-foreground">
                     Suffix <span className="text-[10px]">(opt)</span>
                   </Label>
@@ -538,7 +555,7 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
               </div>
 
               {/* Row 2: Date of Birth & Gender & Status */}
-              <div className="grid grid-cols-3 gap-2.5 items-start">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-start">
                 <div className="space-y-1">
                   <Label htmlFor="student-dob" className="text-xs font-medium">
                     Date of Birth
@@ -607,8 +624,8 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
               </div>
 
               {/* Row 3: Grade Level, Student ID & Address */}
-              <div className="grid grid-cols-12 gap-2.5">
-                <div className="col-span-4 space-y-1">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                <div className="sm:col-span-4 space-y-1">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="student-grade-level" className="text-xs font-medium">
                       Grade Level
@@ -640,7 +657,7 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
                   </Select>
                 </div>
 
-                <div className="col-span-3 space-y-1">
+                <div className="sm:col-span-4 space-y-1">
                   <Label htmlFor="student-id-number" className="text-xs font-medium">
                     ID / Roll # <span className="text-[10px] text-muted-foreground">(opt)</span>
                   </Label>
@@ -654,7 +671,7 @@ export function CreateStudentDialog({ open, onOpenChange }: CreateStudentDialogP
                   />
                 </div>
 
-                <div className="col-span-5 space-y-1">
+                <div className="sm:col-span-4 space-y-1">
                   <Label htmlFor="student-address" className="text-xs font-medium">
                     Home Address <span className="text-[10px] text-muted-foreground">(opt)</span>
                   </Label>

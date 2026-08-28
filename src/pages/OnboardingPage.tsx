@@ -162,7 +162,7 @@ export function OnboardingPage() {
         lastName: lastName.trim(),
         school: school.trim(),
         subject: subject.trim(),
-        avatarUrl: finalAvatarUrl,
+        avatarUrl: avatarMode === 'photo' ? finalAvatarUrl : null,
         avatarColor,
         avatarPreset: avatarMode === 'preset' ? avatarPreset : null,
         gradingScale,
@@ -362,23 +362,31 @@ export function OnboardingPage() {
                       className="relative cursor-pointer rounded-full p-1 ring-2 ring-primary/25 hover:ring-primary/60 transition-all duration-200"
                       title="Click to upload custom photo avatar"
                     >
-                      <Avatar className="h-24 w-24 rounded-full shadow-lg overflow-hidden bg-muted">
-                        {avatarMode === 'photo' && customAvatarDataUrl ? (
-                          <AvatarImage src={customAvatarDataUrl} alt="Avatar" className="object-cover h-full w-full" />
-                        ) : avatarMode === 'preset' && avatarPreset ? (
-                          <AvatarImage
-                            src={AVATAR_PRESETS.find((p) => p.id === avatarPreset)?.src}
-                            alt="Avatar"
-                            className="object-cover h-full w-full"
-                          />
-                        ) : null}
-                        <AvatarFallback
-                          className="rounded-full text-2xl font-bold text-white"
-                          style={{ backgroundColor: avatarColor }}
-                        >
-                          {getInitials(firstName || 'J', lastName || 'D')}
-                        </AvatarFallback>
-                      </Avatar>
+                      {(() => {
+                        const imageSrc =
+                          avatarMode === 'photo' && customAvatarDataUrl
+                            ? customAvatarDataUrl
+                            : avatarMode === 'preset' && avatarPreset
+                            ? AVATAR_PRESETS.find((p) => p.id === avatarPreset)?.src
+                            : null;
+
+                        return (
+                          <div
+                            className="h-24 w-24 rounded-full shadow-lg overflow-hidden flex items-center justify-center select-none ring-1 ring-border/40"
+                            style={{
+                              backgroundColor: imageSrc ? 'transparent' : avatarColor,
+                            }}
+                          >
+                            {imageSrc ? (
+                              <img src={imageSrc} alt="Avatar" className="object-cover h-full w-full rounded-full" />
+                            ) : (
+                              <span className="text-2xl font-bold text-white select-none">
+                                {getInitials(firstName || 'J', lastName || 'D')}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* Hover overlay with camera */}
                       <div className="absolute inset-1 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white transition-opacity duration-200 backdrop-blur-[1px]">
@@ -421,7 +429,7 @@ export function OnboardingPage() {
                 </div>
 
                 {/* Avatar mode toggle buttons */}
-                <div className="grid grid-cols-3 gap-2 p-1 bg-muted/40 rounded-xl border border-border/50">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2 p-1 bg-muted/40 rounded-xl border border-border/50">
                   <button
                     type="button"
                     className={cn(
@@ -438,7 +446,7 @@ export function OnboardingPage() {
                       }
                     }}
                   >
-                    <Camera className="h-3.5 w-3.5" />
+                    <Camera className="h-3.5 w-3.5 shrink-0" />
                     <span>Upload Photo</span>
                   </button>
 
@@ -452,7 +460,7 @@ export function OnboardingPage() {
                     )}
                     onClick={() => setAvatarMode('preset')}
                   >
-                    <Sparkles className="h-3.5 w-3.5" />
+                    <Sparkles className="h-3.5 w-3.5 shrink-0" />
                     <span>Character</span>
                   </button>
 
@@ -466,7 +474,7 @@ export function OnboardingPage() {
                     )}
                     onClick={() => setAvatarMode('initials')}
                   >
-                    <Type className="h-3.5 w-3.5" />
+                    <Type className="h-3.5 w-3.5 shrink-0" />
                     <span>Initials</span>
                   </button>
                 </div>

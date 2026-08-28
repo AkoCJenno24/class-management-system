@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { showGraceUndoToast } from '@/components/ui/grace-undo-toast';
 import { toast } from 'sonner';
@@ -29,7 +28,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { DEFAULT_GRADE_LEVELS, AVATAR_PRESETS, AVATAR_COLORS } from '@/types';
-import { getInitials } from '@/lib/utils';
+import { resolveAvatarSource } from '@/lib/utils';
 
 export function SettingsPage() {
   const { user, teacherProfile } = useAuth();
@@ -70,6 +69,16 @@ export function SettingsPage() {
       }
     }
   }, [teacherProfile]);
+
+  const resolvedAvatar = resolveAvatarSource({
+    avatarUrl,
+    avatarPreset,
+    avatarColor,
+    firstName,
+    lastName,
+    id: user?.uid,
+  });
+  const showImage = resolvedAvatar.mode === 'photo' || resolvedAvatar.mode === 'preset';
 
   // Handle uploading custom photo avatar
   const handleAvatarFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -267,8 +276,6 @@ export function SettingsPage() {
     }
   };
 
-  const selectedPresetObj = AVATAR_PRESETS.find((p) => p.id === avatarPreset);
-
   return (
     <div className="max-w-4xl space-y-8">
       <div>
@@ -387,19 +394,20 @@ export function SettingsPage() {
                   className="relative cursor-pointer rounded-full p-1 ring-2 ring-primary/25 hover:ring-primary/60 transition-all duration-200"
                   title="Click to upload custom photo avatar"
                 >
-                  <Avatar className="h-20 w-20 rounded-full shadow-md overflow-hidden bg-muted">
-                    {avatarUrl ? (
-                      <AvatarImage src={avatarUrl} alt="Avatar" className="object-cover h-full w-full" />
-                    ) : selectedPresetObj ? (
-                      <AvatarImage src={selectedPresetObj.src} alt="Avatar" className="object-cover h-full w-full" />
-                    ) : null}
-                    <AvatarFallback
-                      className="rounded-full text-xl font-bold text-white"
-                      style={{ backgroundColor: avatarColor }}
-                    >
-                      {getInitials(firstName, lastName)}
-                    </AvatarFallback>
-                  </Avatar>
+                  <div
+                    className="h-20 w-20 rounded-full shadow-md overflow-hidden flex items-center justify-center select-none ring-1 ring-border/40"
+                    style={{
+                      backgroundColor: showImage ? 'transparent' : resolvedAvatar.bgColor,
+                    }}
+                  >
+                    {showImage && resolvedAvatar.src ? (
+                      <img src={resolvedAvatar.src} alt="Avatar" className="object-cover h-full w-full rounded-full" />
+                    ) : (
+                      <span className="text-xl font-bold text-white select-none">
+                        {resolvedAvatar.initials}
+                      </span>
+                    )}
+                  </div>
 
                   {/* Hover dark overlay with camera */}
                   <div className="absolute inset-1 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white transition-opacity duration-200 backdrop-blur-[1px]">

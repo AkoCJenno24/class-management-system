@@ -14,7 +14,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Separator } from '@/components/ui/separator';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { toast } from 'sonner';
-import { Loader2, GraduationCap } from 'lucide-react';
+import { Loader2, GraduationCap, Eye, EyeOff } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 /** Google "G" logo as inline SVG */
 function GoogleIcon({ className }: { className?: string }) {
@@ -34,6 +35,8 @@ export function SignUpPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -188,17 +191,40 @@ export function SignUpPage() {
 
             <div className="space-y-1.5">
               <Label htmlFor="signup-password">Password <span className="text-destructive">*</span></Label>
-              <Input
-                id="signup-password"
-                type="password"
-                placeholder="At least 6 characters"
-                value={password}
-                onChange={(e) => handleChange('password', e.target.value, setPassword)}
-                onBlur={() => handleBlur('password', password)}
-                disabled={isLoading || isGoogleLoading}
-                autoComplete="new-password"
-                className={errors.password ? 'border-destructive focus-visible:ring-destructive/30' : ''}
-              />
+              <div className="relative">
+                <Input
+                  id="signup-password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="At least 6 characters"
+                  value={password}
+                  onChange={(e) => handleChange('password', e.target.value, setPassword)}
+                  onBlur={() => handleBlur('password', password)}
+                  disabled={isLoading || isGoogleLoading}
+                  autoComplete="new-password"
+                  autoCapitalizeFirst={false}
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className={cn(
+                    'pr-10',
+                    errors.password ? 'border-destructive focus-visible:ring-destructive/30' : ''
+                  )}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  tabIndex={-1}
+                  className="absolute right-0 top-0 h-full w-9 px-0 text-muted-foreground hover:text-foreground hover:bg-transparent"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
               {errors.password && (
                 <p className="text-xs font-medium text-destructive">{errors.password}</p>
               )}
@@ -206,17 +232,40 @@ export function SignUpPage() {
 
             <div className="space-y-1.5">
               <Label htmlFor="signup-confirm-password">Confirm Password <span className="text-destructive">*</span></Label>
-              <Input
-                id="signup-confirm-password"
-                type="password"
-                placeholder="Re-enter your password"
-                value={confirmPassword}
-                onChange={(e) => handleChange('confirmPassword', e.target.value, setConfirmPassword)}
-                onBlur={() => handleBlur('confirmPassword', confirmPassword)}
-                disabled={isLoading || isGoogleLoading}
-                autoComplete="new-password"
-                className={errors.confirmPassword ? 'border-destructive focus-visible:ring-destructive/30' : ''}
-              />
+              <div className="relative">
+                <Input
+                  id="signup-confirm-password"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  placeholder="Re-enter your password"
+                  value={confirmPassword}
+                  onChange={(e) => handleChange('confirmPassword', e.target.value, setConfirmPassword)}
+                  onBlur={() => handleBlur('confirmPassword', confirmPassword)}
+                  disabled={isLoading || isGoogleLoading}
+                  autoComplete="new-password"
+                  autoCapitalizeFirst={false}
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className={cn(
+                    'pr-10',
+                    errors.confirmPassword ? 'border-destructive focus-visible:ring-destructive/30' : ''
+                  )}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  tabIndex={-1}
+                  className="absolute right-0 top-0 h-full w-9 px-0 text-muted-foreground hover:text-foreground hover:bg-transparent"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
               {errors.confirmPassword && (
                 <p className="text-xs font-medium text-destructive">{errors.confirmPassword}</p>
               )}

@@ -48,27 +48,27 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Welcome banner */}
-      <Card className="border-border bg-card shadow-xs">
-        <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight">
+      <Card className="border-border bg-card shadow-xs overflow-hidden">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
                 Welcome back, {teacherProfile?.firstName || 'Teacher'}!
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Here is an overview of your active classes, roster, and daily grading records.
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button asChild>
+            <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+              <Button asChild className="flex-1 sm:flex-initial">
                 <Link to="/classes">
-                  <Plus className="mr-2 h-4 w-4" />
+                  <Plus className="mr-1.5 h-4 w-4" />
                   Create Class
                 </Link>
               </Button>
-              <Button variant="outline" asChild>
+              <Button variant="outline" asChild className="flex-1 sm:flex-initial">
                 <Link to="/students">
-                  <Plus className="mr-2 h-4 w-4" />
+                  <Plus className="mr-1.5 h-4 w-4" />
                   Add Student
                 </Link>
               </Button>

@@ -94,12 +94,22 @@ export const GRADING_SCALE_PRESETS: Record<string, GradingScale> = {
 /** Default grading scale for new teachers */
 export const DEFAULT_GRADING_SCALE: GradingScale = GRADING_SCALE_PRESETS.numeric100;
 
+/** Supported modern color themes for class cards */
+export type ClassColor = 'default' | 'yellow' | 'blue' | 'green' | 'pink' | 'purple' | 'orange';
+
 /** Class (workspace) belonging to a teacher */
 export interface Class {
   id: string;
   name: string;
   subject: string;
-  description: string;
+  description?: string;
+  room?: string;
+  startTime?: string;
+  endTime?: string;
+  days?: string[];
+  color?: ClassColor;
+  isPinned?: boolean;
+  order?: number;
   studentCount: number;
   createdAt: Date;
   updatedAt: Date;

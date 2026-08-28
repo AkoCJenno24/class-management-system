@@ -336,7 +336,7 @@ export function AddGradeDialog({
           </div>
 
           {/* Score & Max Score */}
-          <div className="grid grid-cols-2 gap-4 items-start">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 items-start">
             <div className="space-y-2">
               <div className="flex h-5 items-center justify-between">
                 <Label htmlFor="grade-score" className="text-sm font-medium whitespace-nowrap">

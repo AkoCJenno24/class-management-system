@@ -80,30 +80,30 @@ export function AppLayout() {
       <AppSidebar onOpenCreateClass={() => setIsCreateClassOpen(true)} />
       <SidebarInset className="flex flex-col h-screen overflow-hidden">
         {/* Top bar with collapse trigger, breadcrumbs, global search trigger, and theme toggle */}
-        <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-background/95 px-4 backdrop-blur-xs transition-[width,height] ease-linear">
-          <div className="flex items-center gap-2 min-w-0">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <Breadcrumb className="hidden sm:block">
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
+        <header className="flex h-14 sm:h-16 shrink-0 items-center justify-between gap-2 sm:gap-3 border-b border-border bg-background/95 px-3 sm:px-4 md:px-6 backdrop-blur-xs transition-[width,height] ease-linear">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 sm:flex-initial">
+            <SidebarTrigger className="-ml-1 h-8 w-8 sm:h-9 sm:w-9" />
+            <Separator orientation="vertical" className="mr-1 sm:mr-2 h-4 hidden xs:block" />
+            <Breadcrumb className="hidden sm:block min-w-0">
+              <BreadcrumbList className="flex-nowrap overflow-hidden text-ellipsis">
+                <BreadcrumbItem className="hidden md:block shrink-0">
                   <BreadcrumbLink render={<Link to="/" />}>
                     Platform
                   </BreadcrumbLink>
                 </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbSeparator className="hidden md:block shrink-0" />
                 {breadcrumbs.map((crumb, index) => {
                   const isLast = index === breadcrumbs.length - 1;
                   return (
-                    <span key={crumb.href} className="inline-flex items-center gap-1.5">
-                      {index > 0 && <BreadcrumbSeparator />}
-                      <BreadcrumbItem>
+                    <span key={crumb.href} className="inline-flex items-center gap-1.5 min-w-0">
+                      {index > 0 && <BreadcrumbSeparator className="shrink-0" />}
+                      <BreadcrumbItem className="min-w-0">
                         {isLast ? (
-                          <BreadcrumbPage className="font-semibold text-foreground">
+                          <BreadcrumbPage className="font-semibold text-foreground truncate max-w-[140px] md:max-w-[220px]">
                             {crumb.label}
                           </BreadcrumbPage>
                         ) : (
-                          <BreadcrumbLink render={<Link to={crumb.href} />}>
+                          <BreadcrumbLink render={<Link to={crumb.href} />} className="truncate max-w-[100px] md:max-w-[180px]">
                             {crumb.label}
                           </BreadcrumbLink>
                         )}
@@ -115,19 +115,19 @@ export function AppLayout() {
             </Breadcrumb>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {/* Global Search Trigger Bar */}
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsGlobalSearchOpen(true)}
-              className="h-9 w-44 sm:w-60 md:w-72 justify-between text-xs text-muted-foreground bg-muted/40 hover:bg-muted/70 hover:text-foreground border-border/80 rounded-lg px-2.5 shadow-2xs cursor-pointer transition-colors"
+              className="h-8 sm:h-9 w-auto min-w-[36px] sm:w-56 md:w-72 justify-between text-xs text-muted-foreground bg-muted/40 hover:bg-muted/70 hover:text-foreground border-border/80 rounded-lg px-2 sm:px-2.5 shadow-2xs cursor-pointer transition-colors"
             >
-              <div className="flex items-center gap-2 truncate">
+              <div className="flex items-center gap-1.5 sm:gap-2 truncate">
                 <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <span className="truncate">Search platform...</span>
+                <span className="hidden xs:inline truncate text-[11px] sm:text-xs">Search platform...</span>
               </div>
-              <div className="hidden sm:flex items-center gap-1 shrink-0">
+              <div className="hidden sm:flex items-center gap-1 shrink-0 ml-1">
                 <kbd className="pointer-events-none inline-flex h-5 select-none items-center justify-center rounded border border-border/80 bg-background/90 px-1.5 font-mono text-[10px] font-semibold text-muted-foreground shadow-2xs">
                   {isMac ? '⌘' : 'Ctrl'}
                 </kbd>
@@ -143,7 +143,7 @@ export function AppLayout() {
         </header>
 
         {/* Scrollable page content */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 pb-safe touch-scroll">
           <Outlet />
         </main>
       </SidebarInset>

@@ -1,11 +1,7 @@
+import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { signOut } from "@/lib/firebase/auth"
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,13 +26,13 @@ import {
   LogOut,
 } from "lucide-react"
 import { toast } from "sonner"
-import { getInitials } from "@/lib/utils"
-import { AVATAR_PRESETS } from "@/types"
+import { resolveAvatarSource } from "@/lib/utils"
 
 export function NavUser() {
   const { teacherProfile } = useAuth()
   const { isMobile } = useSidebar()
   const navigate = useNavigate()
+  const [imageError, setImageError] = useState(false)
 
   const handleSignOut = async () => {
     try {
@@ -52,13 +48,22 @@ export function NavUser() {
     ? `${teacherProfile.firstName} ${teacherProfile.lastName}`
     : "Teacher"
   const email = teacherProfile?.email || ""
-  const initials = teacherProfile
-    ? getInitials(teacherProfile.firstName, teacherProfile.lastName)
-    : "T"
 
-  const avatarPreset = teacherProfile?.avatarPreset
-    ? AVATAR_PRESETS.find((p) => p.id === teacherProfile.avatarPreset)
-    : null
+  // Reset error state when avatar configuration changes
+  useEffect(() => {
+    setImageError(false)
+  }, [teacherProfile?.avatarUrl, teacherProfile?.avatarPreset])
+
+  const resolved = resolveAvatarSource({
+    avatarUrl: teacherProfile?.avatarUrl,
+    avatarPreset: teacherProfile?.avatarPreset,
+    avatarColor: teacherProfile?.avatarColor,
+    firstName: teacherProfile?.firstName || 'Teacher',
+    lastName: teacherProfile?.lastName || '',
+    id: teacherProfile?.uid,
+  })
+
+  const showImage = !imageError && (resolved.mode === 'photo' || resolved.mode === 'preset')
 
   return (
     <SidebarMenu>
@@ -72,19 +77,21 @@ export function NavUser() {
               />
             }
           >
-            <Avatar className="h-8 w-8 rounded-lg">
-              {teacherProfile?.avatarUrl ? (
-                <AvatarImage src={teacherProfile.avatarUrl} alt={name} className="object-cover" />
-              ) : avatarPreset ? (
-                <AvatarImage src={avatarPreset.src} alt={name} className="object-cover" />
-              ) : null}
-              <AvatarFallback
-                className="rounded-lg text-xs font-bold text-white"
-                style={{ backgroundColor: teacherProfile?.avatarColor || "#6366F1" }}
-              >
-                {initials}
-              </AvatarFallback>
-            </Avatar>
+            <div
+              className="h-8 w-8 rounded-lg overflow-hidden shrink-0 flex items-center justify-center select-none shadow-2xs ring-1 ring-border/40"
+              style={{ backgroundColor: showImage ? 'transparent' : resolved.bgColor }}
+            >
+              {showImage && resolved.src ? (
+                <img
+                  src={resolved.src}
+                  alt={name}
+                  onError={() => setImageError(true)}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="text-xs font-bold text-white leading-none">{resolved.initials}</span>
+              )}
+            </div>
             <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
               <span className="truncate font-semibold">{name}</span>
               <span className="truncate text-xs text-muted-foreground">{email}</span>
@@ -100,19 +107,21 @@ export function NavUser() {
             <DropdownMenuGroup>
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-center gap-3 px-2 py-2 text-left text-sm">
-                  <Avatar className="h-9 w-9 rounded-lg">
-                    {teacherProfile?.avatarUrl ? (
-                      <AvatarImage src={teacherProfile.avatarUrl} alt={name} className="object-cover" />
-                    ) : avatarPreset ? (
-                      <AvatarImage src={avatarPreset.src} alt={name} className="object-cover" />
-                    ) : null}
-                    <AvatarFallback
-                      className="rounded-lg text-xs font-bold text-white"
-                      style={{ backgroundColor: teacherProfile?.avatarColor || "#6366F1" }}
-                    >
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
+                  <div
+                    className="h-9 w-9 rounded-lg overflow-hidden shrink-0 flex items-center justify-center select-none shadow-2xs ring-1 ring-border/40"
+                    style={{ backgroundColor: showImage ? 'transparent' : resolved.bgColor }}
+                  >
+                    {showImage && resolved.src ? (
+                      <img
+                        src={resolved.src}
+                        alt={name}
+                        onError={() => setImageError(true)}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-xs font-bold text-white leading-none">{resolved.initials}</span>
+                    )}
+                  </div>
                   <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
                     <span className="truncate font-semibold">{name}</span>
                     <span className="truncate text-xs text-muted-foreground">{email}</span>

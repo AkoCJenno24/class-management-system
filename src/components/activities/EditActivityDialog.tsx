@@ -156,7 +156,7 @@ export function EditActivityDialog({ activity, open, onOpenChange }: EditActivit
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3 items-start">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
             <div className="space-y-1.5">
               <Label htmlFor="edit-activity-type" className="text-xs font-medium">
                 Activity Type <span className="text-destructive">*</span>

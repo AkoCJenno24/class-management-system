@@ -24,6 +24,7 @@ import { db } from './config';
 import type {
   TeacherProfile,
   Class,
+  ClassColor,
   Student,
   StudentStatus,
   Activity,
@@ -169,12 +170,29 @@ export function onTeacherProfileChange(
 /** Creates a new class for the teacher. Returns the new class ID. */
 export async function createClass(
   uid: string,
-  data: { name: string; subject: string; description: string }
+  data: {
+    name: string;
+    subject?: string;
+    description?: string;
+    room?: string;
+    startTime?: string;
+    endTime?: string;
+    days?: string[];
+    color?: ClassColor;
+    isPinned?: boolean;
+    order?: number;
+  }
 ): Promise<string> {
   const ref = await addDoc(collection(db, 'users', uid, 'classes'), {
     name: data.name,
-    subject: data.subject,
-    description: data.description,
+    subject: data.subject ?? '',
+    room: data.room ?? '',
+    startTime: data.startTime ?? '',
+    endTime: data.endTime ?? '',
+    days: Array.isArray(data.days) ? data.days : [],
+    color: data.color ?? 'default',
+    isPinned: data.isPinned ?? false,
+    order: data.order ?? Date.now(),
     studentCount: 0,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -192,6 +210,34 @@ export async function updateClass(
     ...updates,
     updatedAt: serverTimestamp(),
   });
+}
+
+/** Toggles pinning state for a class. */
+export async function togglePinClass(
+  uid: string,
+  classId: string,
+  isPinned: boolean
+): Promise<void> {
+  await updateDoc(doc(db, 'users', uid, 'classes', classId), {
+    isPinned,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Reorders unpinned classes sequence in Firestore. */
+export async function reorderClasses(
+  uid: string,
+  orderedClassIds: string[]
+): Promise<void> {
+  const batch = writeBatch(db);
+  orderedClassIds.forEach((id, index) => {
+    const ref = doc(db, 'users', uid, 'classes', id);
+    batch.update(ref, {
+      order: index,
+      updatedAt: serverTimestamp(),
+    });
+  });
+  await batch.commit();
 }
 
 /** Deletes a class and removes it from all enrolled students. */
@@ -232,16 +278,36 @@ export function onClassesChange(
   return onSnapshot(
     q,
     (snap) => {
-      const classes: Class[] = snap.docs.map((d) => ({
-        id: d.id,
-        name: d.data().name ?? '',
-        subject: d.data().subject ?? '',
-        description: d.data().description ?? '',
-        studentCount: d.data().studentCount ?? 0,
-        createdAt: toDate(d.data().createdAt),
-        updatedAt: toDate(d.data().updatedAt),
-      }));
-      classes.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      const classes: Class[] = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          name: data.name ?? '',
+          subject: data.subject ?? '',
+          description: data.description ?? '',
+          room: data.room ?? '',
+          startTime: data.startTime ?? '',
+          endTime: data.endTime ?? '',
+          days: Array.isArray(data.days) ? data.days : [],
+          color: (data.color as ClassColor) || 'default',
+          isPinned: data.isPinned ?? false,
+          order: typeof data.order === 'number' ? data.order : 0,
+          studentCount: data.studentCount ?? 0,
+          createdAt: toDate(data.createdAt),
+          updatedAt: toDate(data.updatedAt),
+        };
+      });
+
+      // Pinned classes come first, then ordered unpinned classes
+      classes.sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        if (a.order !== undefined && b.order !== undefined && a.order !== b.order) {
+          return a.order - b.order;
+        }
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      });
+
       callback(classes);
     },
     (err) => {
@@ -260,6 +326,13 @@ export async function getClass(uid: string, classId: string): Promise<Class | nu
     name: data.name ?? '',
     subject: data.subject ?? '',
     description: data.description ?? '',
+    room: data.room ?? '',
+    startTime: data.startTime ?? '',
+    endTime: data.endTime ?? '',
+    days: Array.isArray(data.days) ? data.days : [],
+    color: (data.color as ClassColor) || 'default',
+    isPinned: data.isPinned ?? false,
+    order: typeof data.order === 'number' ? data.order : 0,
     studentCount: data.studentCount ?? 0,
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
