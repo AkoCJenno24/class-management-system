@@ -26,6 +26,7 @@ import {
   GraduationCap,
   Camera,
   Trash2,
+  Settings2,
 } from 'lucide-react';
 import { DEFAULT_GRADE_LEVELS, AVATAR_PRESETS, AVATAR_COLORS } from '@/types';
 import { resolveAvatarSource } from '@/lib/utils';
@@ -277,97 +278,23 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="max-w-4xl space-y-8">
+    <div className="w-full space-y-6">
+      {/* Header section */}
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">Account & System Settings</h2>
-        <p className="text-sm text-muted-foreground mt-1">
+        <div className="flex items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Settings2 className="h-5 w-5" />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Account & System Settings
+          </h1>
+        </div>
+        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
           Manage your teacher profile, customizable grade level presets, and system options.
         </p>
       </div>
 
-      {/* ─── 1. Grade Levels Preset Management ─── */}
-      <Card className="border-border shadow-xs">
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Layers className="h-5 w-5" />
-              </div>
-              <div>
-                <CardTitle className="text-base">Preset Grade Levels</CardTitle>
-                <CardDescription>
-                  These grade levels will appear in the dropdown whenever you add or edit students.
-                </CardDescription>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsResetLevelsOpen(true)}
-              disabled={isSavingGrades}
-              className="text-xs self-start sm:self-auto cursor-pointer"
-            >
-              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-              Restore Defaults
-            </Button>
-          </div>
-        </CardHeader>
-
-        <CardContent className="space-y-6">
-          {/* Add new grade level input */}
-          <form onSubmit={handleAddGradeLevel} className="flex gap-2">
-            <Input
-              placeholder="Add custom grade level (e.g., Pre-K, Grade 10 - Honors, Year 1)..."
-              value={newGradeLevel}
-              onChange={(e) => setNewGradeLevel(e.target.value)}
-              className="max-w-md shadow-xs text-sm"
-            />
-            <Button type="submit" disabled={!newGradeLevel.trim()} className="shrink-0 cursor-pointer">
-              <Plus className="mr-1.5 h-4 w-4" />
-              Add Level
-            </Button>
-          </form>
-
-          {/* Active Grade Levels Tags */}
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Active Presets ({gradeLevels.length})
-            </Label>
-            <div className="flex flex-wrap gap-2 pt-1">
-              {gradeLevels.map((level) => (
-                <Badge
-                  key={level}
-                  variant="secondary"
-                  className="pl-3 pr-1.5 py-1.5 text-xs font-medium flex items-center gap-1.5 border border-border bg-card hover:bg-accent transition-colors shadow-2xs"
-                >
-                  <GraduationCap className="h-3.5 w-3.5 text-primary" />
-                  <span>{level}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (gradeLevels.length <= 1) {
-                        toast.error('You must keep at least one grade level.');
-                        return;
-                      }
-                      setLevelToDelete(level);
-                    }}
-                    className="ml-1 cursor-pointer rounded-full p-0.5 hover:bg-destructive/20 hover:text-destructive transition-colors"
-                    title={`Remove ${level}`}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                    <span className="sr-only">Remove {level}</span>
-                  </button>
-                </Badge>
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              💡 Tip: Click the ✖ on any tag to remove it, or use the input above to add your school's custom naming conventions.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ─── 2. Teacher Profile Settings ─── */}
+      {/* ─── 1. Teacher Profile Settings ─── */}
       <Card className="border-border shadow-xs">
         <CardHeader>
           <div className="flex items-center gap-2.5">
@@ -663,6 +590,88 @@ export function SettingsPage() {
               </Button>
             </div>
           </form>
+        </CardContent>
+      </Card>
+
+      {/* ─── 2. Grade Levels Preset Management ─── */}
+      <Card className="border-border shadow-xs">
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Layers className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Preset Grade Levels</CardTitle>
+                <CardDescription>
+                  These grade levels will appear in the dropdown whenever you add or edit students.
+                </CardDescription>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsResetLevelsOpen(true)}
+              disabled={isSavingGrades}
+              className="text-xs self-start sm:self-auto cursor-pointer"
+            >
+              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+              Restore Defaults
+            </Button>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-6">
+          {/* Add new grade level input */}
+          <form onSubmit={handleAddGradeLevel} className="flex gap-2 max-w-xl">
+            <Input
+              placeholder="Add custom grade level (e.g., Pre-K, Grade 10 - Honors, Year 1)..."
+              value={newGradeLevel}
+              onChange={(e) => setNewGradeLevel(e.target.value)}
+              className="flex-1 shadow-xs text-sm"
+            />
+            <Button type="submit" disabled={!newGradeLevel.trim()} className="shrink-0 cursor-pointer">
+              <Plus className="mr-1.5 h-4 w-4" />
+              Add Level
+            </Button>
+          </form>
+
+          {/* Active Grade Levels Tags */}
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Active Presets ({gradeLevels.length})
+            </Label>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {gradeLevels.map((level) => (
+                <Badge
+                  key={level}
+                  variant="secondary"
+                  className="pl-3 pr-1.5 py-1.5 text-xs font-medium flex items-center gap-1.5 border border-border bg-card hover:bg-accent transition-colors shadow-2xs"
+                >
+                  <GraduationCap className="h-3.5 w-3.5 text-primary" />
+                  <span>{level}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (gradeLevels.length <= 1) {
+                        toast.error('You must keep at least one grade level.');
+                        return;
+                      }
+                      setLevelToDelete(level);
+                    }}
+                    className="ml-1 cursor-pointer rounded-full p-0.5 hover:bg-destructive/20 hover:text-destructive transition-colors"
+                    title={`Remove ${level}`}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    <span className="sr-only">Remove {level}</span>
+                  </button>
+                </Badge>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              💡 Tip: Click the ✖ on any tag to remove it, or use the input above to add your school's custom naming conventions.
+            </p>
+          </div>
         </CardContent>
       </Card>
 

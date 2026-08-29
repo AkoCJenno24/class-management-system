@@ -25,6 +25,13 @@ import { StudentAvatar } from '@/components/students/StudentAvatar';
 import { StudentStatusBadge } from '@/components/students/StudentStatusBadge';
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { showGraceUndoToast } from '@/components/ui/grace-undo-toast';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import {
   Plus,
@@ -39,6 +46,7 @@ import {
   UserCheck,
   Calendar,
   Filter,
+  MoreVertical,
 } from 'lucide-react';
 import type { Student, Class } from '@/types';
 import { STUDENT_STATUS_OPTIONS } from '@/types';
@@ -167,18 +175,23 @@ export function StudentsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Top action bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search by name, ID, grade, email, parent..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 shadow-xs text-sm"
-          />
+      {/* Header section */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Users className="h-5 w-5" />
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              Students
+            </h1>
+          </div>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+            Manage and organize your student roster, profiles, and academic records.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center gap-2 shrink-0">
           <Button variant="outline" size="sm" asChild className="hidden sm:inline-flex">
             <Link to="/settings">
               <Settings2 className="mr-1.5 h-3.5 w-3.5" />
@@ -189,6 +202,19 @@ export function StudentsPage() {
             <Plus className="mr-2 h-4 w-4" />
             Add Student
           </Button>
+        </div>
+      </div>
+
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search students by name, ID, grade, email, parent..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 shadow-2xs text-xs sm:text-sm h-9"
+          />
         </div>
       </div>
 
@@ -332,25 +358,39 @@ export function StudentsPage() {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-xs"
-                        onClick={() => setEditingStudent(student)}
-                      >
-                        <Pencil className="h-3 w-3 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10"
-                        onClick={() => setStudentToDelete(student)}
-                      >
-                        <Trash2 className="h-3 w-3 mr-1" />
-                        Delete
-                      </Button>
+                    <div className="shrink-0">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground cursor-pointer"
+                              title="More options"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                              <span className="sr-only">More options</span>
+                            </Button>
+                          }
+                        />
+                        <DropdownMenuContent align="end" className="w-36">
+                          <DropdownMenuItem
+                            onClick={() => setEditingStudent(student)}
+                            className="cursor-pointer gap-2"
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span>Edit</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => setStudentToDelete(student)}
+                            className="cursor-pointer gap-2 text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span>Delete</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </Card>
@@ -486,27 +526,39 @@ export function StudentsPage() {
 
                         {/* Actions */}
                         <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
-                              onClick={() => setEditingStudent(student)}
-                              title="Edit student"
-                            >
-                              <Pencil className="h-4 w-4" />
-                              <span className="sr-only">Edit</span>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:bg-destructive/10 cursor-pointer"
-                              onClick={() => setStudentToDelete(student)}
-                              title="Delete student"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              <span className="sr-only">Delete</span>
-                            </Button>
+                          <div className="flex items-center justify-end">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger
+                                render={
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
+                                    title="More options"
+                                  >
+                                    <MoreVertical className="h-4 w-4" />
+                                    <span className="sr-only">More options</span>
+                                  </Button>
+                                }
+                              />
+                              <DropdownMenuContent align="end" className="w-36">
+                                <DropdownMenuItem
+                                  onClick={() => setEditingStudent(student)}
+                                  className="cursor-pointer gap-2"
+                                >
+                                  <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                                  <span>Edit</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => setStudentToDelete(student)}
+                                  className="cursor-pointer gap-2 text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <span>Delete</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </TableCell>
                       </TableRow>
