@@ -14,8 +14,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Separator } from '@/components/ui/separator';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { toast } from 'sonner';
-import { Loader2, GraduationCap, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ClassBunLogoIcon } from '@/components/ui/ClassBunLogo';
 
 /** Google "G" logo as inline SVG */
 function GoogleIcon({ className }: { className?: string }) {
@@ -122,11 +123,11 @@ export function LoginPage() {
 
       <Card className="w-full max-w-md border-border/50 shadow-xl">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-            <GraduationCap className="h-7 w-7 text-primary" />
+          <div className="mx-auto mb-4 flex items-center justify-center">
+            <ClassBunLogoIcon size={56} />
           </div>
-          <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
-          <CardDescription>Sign in to your class management account</CardDescription>
+          <CardTitle className="text-2xl font-bold tracking-tight">Welcome to ClassBun</CardTitle>
+          <CardDescription>Sign in to your teacher workspace</CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">

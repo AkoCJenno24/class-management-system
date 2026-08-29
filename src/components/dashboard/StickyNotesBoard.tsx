@@ -57,39 +57,39 @@ interface ColorConfig {
 const COLOR_CONFIGS: Record<StickyNoteColor, ColorConfig> = {
   yellow: {
     name: 'Yellow',
-    bgClass: 'bg-amber-100/80 border-amber-300/80 text-amber-950 dark:bg-amber-950/30 dark:border-amber-700/40 dark:text-amber-100',
+    bgClass: 'bg-amber-100/80 border-border text-amber-950 dark:bg-amber-950/30 dark:border-border dark:text-amber-100',
     dotColor: 'bg-amber-400 border-amber-500',
-    badgeClass: 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-400/40',
+    badgeClass: 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-border',
   },
   blue: {
     name: 'Sky Blue',
-    bgClass: 'bg-sky-100/80 border-sky-300/80 text-sky-950 dark:bg-sky-950/30 dark:border-sky-700/40 dark:text-sky-100',
+    bgClass: 'bg-sky-100/80 border-border text-sky-950 dark:bg-sky-950/30 dark:border-border dark:text-sky-100',
     dotColor: 'bg-sky-400 border-sky-500',
-    badgeClass: 'bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-400/40',
+    badgeClass: 'bg-sky-500/20 text-sky-800 dark:text-sky-300 border-border',
   },
   green: {
     name: 'Mint Green',
-    bgClass: 'bg-emerald-100/80 border-emerald-300/80 text-emerald-950 dark:bg-emerald-950/30 dark:border-emerald-700/40 dark:text-emerald-100',
+    bgClass: 'bg-emerald-100/80 border-border text-emerald-950 dark:bg-emerald-950/30 dark:border-border dark:text-emerald-100',
     dotColor: 'bg-emerald-400 border-emerald-500',
-    badgeClass: 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-400/40',
+    badgeClass: 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-border',
   },
   pink: {
     name: 'Rose Pink',
-    bgClass: 'bg-pink-100/80 border-pink-300/80 text-pink-950 dark:bg-pink-950/30 dark:border-pink-700/40 dark:text-pink-100',
+    bgClass: 'bg-pink-100/80 border-border text-pink-950 dark:bg-pink-950/30 dark:border-border dark:text-pink-100',
     dotColor: 'bg-pink-400 border-pink-500',
-    badgeClass: 'bg-pink-500/20 text-pink-800 dark:text-pink-300 border-pink-400/40',
+    badgeClass: 'bg-pink-500/20 text-pink-800 dark:text-pink-300 border-border',
   },
   purple: {
     name: 'Lavender',
-    bgClass: 'bg-purple-100/80 border-purple-300/80 text-purple-950 dark:bg-purple-950/30 dark:border-purple-700/40 dark:text-purple-100',
+    bgClass: 'bg-purple-100/80 border-border text-purple-950 dark:bg-purple-950/30 dark:border-border dark:text-purple-100',
     dotColor: 'bg-purple-400 border-purple-500',
-    badgeClass: 'bg-purple-500/20 text-purple-800 dark:text-purple-300 border-purple-400/40',
+    badgeClass: 'bg-purple-500/20 text-purple-800 dark:text-purple-300 border-border',
   },
   orange: {
     name: 'Peach Orange',
-    bgClass: 'bg-orange-100/80 border-orange-300/80 text-orange-950 dark:bg-orange-950/30 dark:border-orange-700/40 dark:text-orange-100',
+    bgClass: 'bg-orange-100/80 border-border text-orange-950 dark:bg-orange-950/30 dark:border-border dark:text-orange-100',
     dotColor: 'bg-orange-400 border-orange-500',
-    badgeClass: 'bg-orange-500/20 text-orange-800 dark:text-orange-300 border-orange-400/40',
+    badgeClass: 'bg-orange-500/20 text-orange-800 dark:text-orange-300 border-border',
   },
 };
 
@@ -349,9 +349,9 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 flex flex-col flex-1 min-h-0">
       {/* ─── Header ─── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div className="min-w-0">
           <h3 className="text-base font-semibold tracking-tight flex items-center gap-2">
             <NoteIcon className="h-4 w-4 text-primary shrink-0" />
@@ -369,8 +369,8 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
 
       {/* ─── Notes Grid ─── */}
       {visibleItems.length === 0 ? (
-        <Card className="border-dashed shadow-xs">
-          <CardContent className="flex flex-col items-center justify-center py-10 text-center p-4 sm:p-6">
+        <Card className="border-dashed shadow-xs flex-1 flex flex-col items-center justify-center min-h-[220px]">
+          <CardContent className="flex flex-col items-center justify-center py-10 text-center p-4 sm:p-6 my-auto">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 mb-3">
               <NoteIcon className="h-6 w-6" />
             </div>
@@ -385,7 +385,7 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3.5 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3.5 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 flex-1 content-start">
           {visibleItems.map((note) => {
             const config = COLOR_CONFIGS[note.color] || COLOR_CONFIGS.yellow;
             const isDraggable = !note.isPinned;
@@ -402,7 +402,7 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
                 onDragLeave={(e) => handleDragLeave(e, note)}
                 onDrop={(e) => handleDrop(e, note)}
                 onDragEnd={handleDragEnd}
-                className={`group relative flex flex-col justify-between rounded-xl border p-3.5 sm:p-4 shadow-xs transition-all duration-200 select-none min-w-0 ${
+                className={`group relative flex flex-col justify-between rounded-xl border border-border p-3.5 sm:p-4 shadow-xs transition-all duration-200 select-none min-w-0 ${
                   isDraggable
                     ? 'cursor-grab active:cursor-grabbing hover:shadow-md'
                     : 'cursor-default'
@@ -457,7 +457,7 @@ export function StickyNotesBoard({ notes }: StickyNotesBoardProps) {
                 </div>
 
                 {/* Note Footer: Color swatches & Actions */}
-                <div className="flex items-center justify-between border-t border-black/10 dark:border-white/10 pt-2.5 mt-3 text-[11px] opacity-80 gap-2">
+                <div className="flex items-center justify-between border-t border-border/80 pt-2.5 mt-3 text-[11px] opacity-80 gap-2">
                   {/* Quick Color Swatches */}
                   <div className="flex items-center gap-1 flex-wrap">
                     {COLOR_KEYS.map((colKey) => (

@@ -11,7 +11,7 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
 } from "@/components/ui/sidebar"
-import { LayoutDashboard, BookOpen, Users, Settings, Archive, ChevronRight } from "lucide-react"
+import { LayoutDashboard, BookOpen, Users, Settings, Archive, ChevronRight, FolderOpen } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export function NavMain() {
@@ -112,6 +112,20 @@ export function NavMain() {
             <span>Students</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
+
+        {/* Documents (Google Drive) */}
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            render={<Link to="/documents" />}
+            isActive={location.pathname.startsWith("/documents")}
+            tooltip="Documents"
+            className="font-medium"
+          >
+            <FolderOpen className="size-4" />
+            <span>Documents</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+
 
         {/* Settings */}
         <SidebarMenuItem>

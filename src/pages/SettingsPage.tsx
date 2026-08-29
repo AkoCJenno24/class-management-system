@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { updateTeacherProfile } from '@/lib/firebase/firestore';
-import { uploadAvatar } from '@/lib/firebase/storage';
+import { uploadAvatar, uploadSchoolLogo } from '@/lib/firebase/storage';
 import { resizeImage } from '@/lib/image-utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,9 @@ import {
   Camera,
   Trash2,
   Settings2,
+  Upload,
 } from 'lucide-react';
+import { IconSchool } from '@tabler/icons-react';
 import { DEFAULT_GRADE_LEVELS, AVATAR_PRESETS, AVATAR_COLORS } from '@/types';
 import { resolveAvatarSource } from '@/lib/utils';
 
@@ -44,6 +46,11 @@ export function SettingsPage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // School Logo states
+  const [schoolLogoUrl, setSchoolLogoUrl] = useState<string | null>(null);
+  const [isUploadingSchoolLogo, setIsUploadingSchoolLogo] = useState(false);
+  const schoolLogoInputRef = useRef<HTMLInputElement>(null);
 
   // Grade Levels state
   const [gradeLevels, setGradeLevels] = useState<string[]>(DEFAULT_GRADE_LEVELS);
@@ -63,6 +70,7 @@ export function SettingsPage() {
       setAvatarColor(teacherProfile.avatarColor || '#6366F1');
       setAvatarPreset(teacherProfile.avatarPreset || null);
       setAvatarUrl(teacherProfile.avatarUrl || null);
+      setSchoolLogoUrl(teacherProfile.schoolLogoUrl || null);
       if (Array.isArray(teacherProfile.gradeLevels) && teacherProfile.gradeLevels.length > 0) {
         setGradeLevels(teacherProfile.gradeLevels);
       } else {
@@ -123,6 +131,64 @@ export function SettingsPage() {
       setIsUploadingAvatar(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Handle uploading custom school logo
+  const handleSchoolLogoFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file (PNG, JPG, JPEG, SVG, WebP).');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image size exceeds 10MB limit. Please choose a smaller logo.');
+      return;
+    }
+
+    setIsUploadingSchoolLogo(true);
+    try {
+      const processed = await resizeImage(file, 400, 400, 0.9);
+      setSchoolLogoUrl(processed.dataUrl);
+
+      if (user) {
+        let finalUrl = processed.dataUrl;
+        try {
+          finalUrl = await uploadSchoolLogo(user.uid, processed.file);
+        } catch (storageErr) {
+          console.warn('Storage upload fallback to dataUrl:', storageErr);
+        }
+        setSchoolLogoUrl(finalUrl);
+        await updateTeacherProfile(user.uid, {
+          schoolLogoUrl: finalUrl,
+        });
+        toast.success('School / Institution logo updated successfully!');
+      }
+    } catch (err: unknown) {
+      console.error('Error processing school logo:', err);
+      toast.error('Failed to process image. Please try another logo.');
+    } finally {
+      setIsUploadingSchoolLogo(false);
+      if (schoolLogoInputRef.current) {
+        schoolLogoInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Handle removing school logo and resetting to default icon
+  const handleRemoveSchoolLogo = async () => {
+    setSchoolLogoUrl(null);
+    if (user) {
+      try {
+        await updateTeacherProfile(user.uid, { schoolLogoUrl: null });
+        toast.success('School logo reset to default institution icon.');
+      } catch (err) {
+        console.error('Error removing school logo:', err);
+        toast.error('Failed to reset school logo.');
       }
     }
   };
@@ -265,6 +331,7 @@ export function SettingsPage() {
         lastName: lastName.trim(),
         school: school.trim(),
         subject: subject.trim(),
+        schoolLogoUrl: schoolLogoUrl || null,
         avatarColor,
         avatarPreset: avatarUrl ? null : avatarPreset,
         avatarUrl: avatarUrl || null,
@@ -571,6 +638,80 @@ export function SettingsPage() {
                   onChange={(e) => setSubject(e.target.value)}
                   disabled={isSavingProfile}
                 />
+              </div>
+            </div>
+
+            {/* School / Institution Logo Customization */}
+            <div className="rounded-xl border border-border/70 bg-muted/20 p-4 sm:p-5 space-y-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  {/* Live Preview matching sidebar */}
+                  <div className="relative shrink-0">
+                    <div className="flex aspect-square size-14 items-center justify-center rounded-xl bg-muted/30 border border-border/40 overflow-hidden">
+                      {schoolLogoUrl ? (
+                        <img
+                          src={schoolLogoUrl}
+                          alt="School Logo"
+                          className="size-11 object-contain"
+                        />
+                      ) : (
+                        <IconSchool stroke={2} className="size-8 text-foreground" />
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                      <IconSchool stroke={2} className="size-4 text-primary" />
+                      School / Institution Logo
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Displays in your sidebar workspace header. Defaults to the institution building icon.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Upload & Reset Buttons */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => schoolLogoInputRef.current?.click()}
+                    disabled={isUploadingSchoolLogo || isSavingProfile}
+                    className="text-xs cursor-pointer h-8"
+                  >
+                    {isUploadingSchoolLogo ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="mr-1.5 h-3.5 w-3.5 text-primary" />
+                    )}
+                    {schoolLogoUrl ? 'Change Logo' : 'Upload Logo'}
+                  </Button>
+
+                  {schoolLogoUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRemoveSchoolLogo}
+                      disabled={isUploadingSchoolLogo || isSavingProfile}
+                      className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer h-8"
+                    >
+                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                      Reset to Default
+                    </Button>
+                  )}
+
+                  <input
+                    ref={schoolLogoInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+                    onChange={handleSchoolLogoFileSelect}
+                    className="hidden"
+                    aria-hidden="true"
+                  />
+                </div>
               </div>
             </div>
 

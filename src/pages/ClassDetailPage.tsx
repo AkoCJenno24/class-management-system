@@ -26,6 +26,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select';
 import { AddStudentToClassDialog } from '@/components/classes/AddStudentToClassDialog';
 import { AddGradeDialog } from '@/components/grades/AddGradeDialog';
 import { GradeTable } from '@/components/grades/GradeTable';
@@ -54,6 +60,10 @@ import {
   Archive,
   ArchiveRestore,
   GraduationCap,
+  Search,
+  X,
+  ArrowUpDown,
+  Filter,
 } from 'lucide-react';
 import { ScheduleDaysPicker } from '@/components/classes/ScheduleDaysPicker';
 import { TimePicker12Hour } from '@/components/classes/TimePicker12Hour';
@@ -85,6 +95,11 @@ export function ClassDetailPage() {
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
   const [isAddGradeOpen, setIsAddGradeOpen] = useState(false);
   const [selectedActivityForGrade, setSelectedActivityForGrade] = useState<Activity | null>(null);
+
+  // Search & sort state for enrolled students tab
+  const [studentSearch, setStudentSearch] = useState('');
+  const [studentSort, setStudentSort] = useState<'firstName-asc' | 'firstName-desc' | 'lastName-asc' | 'lastName-desc'>('firstName-asc');
+  const [studentGenderFilter, setStudentGenderFilter] = useState<'all' | 'male' | 'female'>('all');
 
   // Settings form
   const [editName, setEditName] = useState('');
@@ -171,6 +186,51 @@ export function ClassDetailPage() {
   const enrolledStudents = allStudents.filter(
     (s) => s.classIds.includes(classId!) && !pendingRemoveStudentIds.has(s.id)
   );
+
+  // Filter enrolled students strictly by First Name, Middle Name, and Last Name + Gender
+  const filteredEnrolledStudents = enrolledStudents.filter((s) => {
+    // Gender filter
+    if (studentGenderFilter !== 'all') {
+      const g = (s.gender || '').toLowerCase().trim();
+      if (g !== studentGenderFilter) return false;
+    }
+
+    // Name search
+    const term = studentSearch.toLowerCase().trim();
+    if (!term) return true;
+
+    const firstName = (s.firstName || '').toLowerCase();
+    const middleName = (s.middleName || '').toLowerCase();
+    const lastName = (s.lastName || '').toLowerCase();
+    const fullName = formatStudentFullName(s).toLowerCase();
+    const firstLast = `${firstName} ${lastName}`.trim();
+    const lastFirst = `${lastName} ${firstName}`.trim();
+
+    return (
+      firstName.includes(term) ||
+      middleName.includes(term) ||
+      lastName.includes(term) ||
+      fullName.includes(term) ||
+      firstLast.includes(term) ||
+      lastFirst.includes(term)
+    );
+  });
+
+  // Sort filtered enrolled students by First Name or Last Name
+  const sortedEnrolledStudents = [...filteredEnrolledStudents].sort((a, b) => {
+    switch (studentSort) {
+      case 'firstName-asc':
+        return (a.firstName || '').localeCompare(b.firstName || '', undefined, { sensitivity: 'base' });
+      case 'firstName-desc':
+        return (b.firstName || '').localeCompare(a.firstName || '', undefined, { sensitivity: 'base' });
+      case 'lastName-asc':
+        return (a.lastName || '').localeCompare(b.lastName || '', undefined, { sensitivity: 'base' });
+      case 'lastName-desc':
+        return (b.lastName || '').localeCompare(a.lastName || '', undefined, { sensitivity: 'base' });
+      default:
+        return 0;
+    }
+  });
 
   const scale = teacherProfile?.gradingScale || DEFAULT_GRADING_SCALE;
 
@@ -513,59 +573,189 @@ export function ClassDetailPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {enrolledStudents.map((student) => (
-                <Card
-                  key={student.id}
-                  className="border-border shadow-xs hover:border-primary/40 transition-colors flex flex-col justify-between"
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-3">
-                        <StudentAvatar student={student} size="default" showStatusIndicator />
-                        <div>
-                          <CardTitle className="text-base font-semibold">
-                            {formatStudentFullName(student)}
-                          </CardTitle>
-                          <p className="text-xs text-muted-foreground font-mono">
-                            {student.studentId ? `ID: ${student.studentId}` : 'No ID'}
-                          </p>
-                        </div>
-                      </div>
-                      <StudentStatusBadge status={student.status} />
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="flex items-center justify-between border-t border-border/60 pt-3 mt-1">
-                      {currentClass.status !== 'archived' ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs text-muted-foreground hover:text-destructive cursor-pointer"
-                          onClick={() =>
-                            setStudentToRemove({
-                              id: student.id,
-                              name: formatStudentFullName(student),
-                            })
-                          }
-                        >
-                          <UserMinus className="mr-1 h-3.5 w-3.5" />
-                          Remove
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground font-medium">Enrolled Record</span>
-                      )}
+            <>
+              {/* Search & Sort Controls */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <Input
+                    placeholder="Search students by name (first, middle, last)..."
+                    value={studentSearch}
+                    onChange={(e) => setStudentSearch(e.target.value)}
+                    className="pl-9 pr-8 text-xs sm:text-sm h-9 shadow-2xs"
+                  />
+                  {studentSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setStudentSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer p-0.5 rounded-full hover:bg-muted"
+                      title="Clear search"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      <span className="sr-only">Clear search</span>
+                    </button>
+                  )}
+                </div>
 
-                      <Button variant="outline" size="sm" asChild className="text-xs cursor-pointer">
-                        <Link to={`/classes/${classId}/students/${student.id}`}>
-                          View Records
-                        </Link>
-                      </Button>
+                {/* Sort Option */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Select
+                    value={studentSort}
+                    onValueChange={(val) =>
+                      setStudentSort(val as 'firstName-asc' | 'firstName-desc' | 'lastName-asc' | 'lastName-desc')
+                    }
+                  >
+                    <SelectTrigger className="h-9 w-full sm:w-auto px-3 text-xs sm:text-sm bg-card shadow-2xs gap-1.5 cursor-pointer">
+                      <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span className="font-medium">Sort</span>
+                    </SelectTrigger>
+                    <SelectContent align="end" alignItemWithTrigger={false} className="w-56 min-w-[220px] p-1.5 shadow-lg">
+                      <SelectItem value="firstName-asc" className="cursor-pointer text-xs sm:text-sm py-2 pr-8 pl-2.5">
+                        First Name (Ascending)
+                      </SelectItem>
+                      <SelectItem value="firstName-desc" className="cursor-pointer text-xs sm:text-sm py-2 pr-8 pl-2.5">
+                        First Name (Descending)
+                      </SelectItem>
+                      <SelectItem value="lastName-asc" className="cursor-pointer text-xs sm:text-sm py-2 pr-8 pl-2.5">
+                        Last Name (Ascending)
+                      </SelectItem>
+                      <SelectItem value="lastName-desc" className="cursor-pointer text-xs sm:text-sm py-2 pr-8 pl-2.5">
+                        Last Name (Descending)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {/* Filter Option */}
+                  <Select
+                    value={studentGenderFilter}
+                    onValueChange={(val) =>
+                      setStudentGenderFilter(val as 'all' | 'male' | 'female')
+                    }
+                  >
+                    <SelectTrigger
+                      className={`h-9 w-full sm:w-auto px-3 text-xs sm:text-sm bg-card shadow-2xs gap-1.5 cursor-pointer ${
+                        studentGenderFilter !== 'all' ? 'border-primary/50 text-primary bg-primary/5' : ''
+                      }`}
+                    >
+                      <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span className="font-medium">
+                        {studentGenderFilter === 'all'
+                          ? 'Filter'
+                          : studentGenderFilter === 'male'
+                          ? 'Filter: Male'
+                          : 'Filter: Female'}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent align="end" alignItemWithTrigger={false} className="w-48 min-w-[180px] p-1.5 shadow-lg">
+                      <SelectItem value="all" className="cursor-pointer text-xs sm:text-sm py-2 pr-8 pl-2.5">
+                        All Genders
+                      </SelectItem>
+                      <SelectItem value="male" className="cursor-pointer text-xs sm:text-sm py-2 pr-8 pl-2.5">
+                        Male
+                      </SelectItem>
+                      <SelectItem value="female" className="cursor-pointer text-xs sm:text-sm py-2 pr-8 pl-2.5">
+                        Female
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Students Grid or Empty Search State */}
+              {sortedEnrolledStudents.length === 0 ? (
+                <Card className="border-dashed">
+                  <CardContent className="flex flex-col items-center justify-center py-10 text-center">
+                    <Search className="h-8 w-8 text-muted-foreground mb-2 opacity-60" />
+                    <h4 className="text-sm font-semibold">No students found</h4>
+                    <p className="text-xs text-muted-foreground max-w-sm mt-0.5 mb-3">
+                      {studentSearch && studentGenderFilter !== 'all'
+                        ? `No ${studentGenderFilter} students match "${studentSearch}".`
+                        : studentSearch
+                        ? `No enrolled students match "${studentSearch}".`
+                        : `No ${studentGenderFilter} students enrolled in this class.`}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {studentSearch && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setStudentSearch('')}
+                          className="text-xs cursor-pointer h-8"
+                        >
+                          <X className="mr-1.5 h-3.5 w-3.5" />
+                          Clear Search
+                        </Button>
+                      )}
+                      {studentGenderFilter !== 'all' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setStudentGenderFilter('all')}
+                          className="text-xs cursor-pointer h-8"
+                        >
+                          <X className="mr-1.5 h-3.5 w-3.5" />
+                          Reset Filter
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
-              ))}
-            </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {sortedEnrolledStudents.map((student) => (
+                    <Card
+                      key={student.id}
+                      className="border-border shadow-xs hover:border-primary/40 transition-colors flex flex-col justify-between"
+                    >
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-3">
+                            <StudentAvatar student={student} size="default" showStatusIndicator />
+                            <div>
+                              <CardTitle className="text-base font-semibold">
+                                {formatStudentFullName(student)}
+                              </CardTitle>
+                              <p className="text-xs text-muted-foreground font-mono">
+                                {student.studentId ? `ID: ${student.studentId}` : 'No ID'}
+                              </p>
+                            </div>
+                          </div>
+                          <StudentStatusBadge status={student.status} />
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <div className="flex items-center justify-between border-t border-border/60 pt-3 mt-1">
+                          {currentClass.status !== 'archived' ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs text-muted-foreground hover:text-destructive cursor-pointer"
+                              onClick={() =>
+                                setStudentToRemove({
+                                  id: student.id,
+                                  name: formatStudentFullName(student),
+                                })
+                              }
+                            >
+                              <UserMinus className="mr-1 h-3.5 w-3.5" />
+                              Remove
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground font-medium">Enrolled Record</span>
+                          )}
+
+                          <Button variant="outline" size="sm" asChild className="text-xs cursor-pointer">
+                            <Link to={`/classes/${classId}/students/${student.id}`}>
+                              View Records
+                            </Link>
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </TabsContent>
 

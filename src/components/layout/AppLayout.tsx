@@ -40,6 +40,9 @@ function getBreadcrumbs(pathname: string) {
   if (pathname === '/students') {
     return [{ label: 'Students', href: '/students' }];
   }
+  if (pathname.startsWith('/documents')) {
+    return [{ label: 'Documents', href: '/documents' }];
+  }
   if (pathname === '/settings') {
     return [{ label: 'Settings', href: '/settings' }];
   }
@@ -94,7 +97,7 @@ export function AppLayout() {
               <BreadcrumbList className="flex-nowrap overflow-hidden text-ellipsis">
                 <BreadcrumbItem className="hidden md:block shrink-0">
                   <BreadcrumbLink render={<Link to="/" />}>
-                    Platform
+                    ClassBun
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block shrink-0" />
@@ -149,7 +152,7 @@ export function AppLayout() {
         </header>
 
         {/* Scrollable page content */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 pb-safe touch-scroll">
+        <main className="flex-1 flex flex-col overflow-y-auto p-3 sm:p-4 md:p-6 pb-safe touch-scroll">
           <Outlet />
         </main>
       </SidebarInset>

@@ -42,14 +42,33 @@ import type {
   AppNotification,
   NotificationType,
   NotificationCategory,
+  DocFolder,
+  DocFile,
 } from '@/types';
 import { DEFAULT_GRADING_SCALE, DEFAULT_GRADE_LEVELS } from '@/types';
+import { deleteDocumentFile } from './storage';
 
-// ─── Helper: Convert Firestore timestamps to Date ───────────────────────────
 
 function toDate(timestamp: unknown): Date {
-  if (timestamp && typeof timestamp === 'object' && 'toDate' in timestamp) {
-    return (timestamp as { toDate: () => Date }).toDate();
+  if (
+    timestamp &&
+    typeof timestamp === 'object' &&
+    'toDate' in timestamp &&
+    typeof (timestamp as { toDate: () => Date }).toDate === 'function'
+  ) {
+    try {
+      const d = (timestamp as { toDate: () => Date }).toDate();
+      if (d instanceof Date && !isNaN(d.getTime())) return d;
+    } catch {
+      return new Date();
+    }
+  }
+  if (timestamp instanceof Date && !isNaN(timestamp.getTime())) {
+    return timestamp;
+  }
+  if (typeof timestamp === 'number' || typeof timestamp === 'string') {
+    const d = new Date(timestamp);
+    if (!isNaN(d.getTime())) return d;
   }
   return new Date();
 }
@@ -1266,6 +1285,379 @@ export function onNotificationsChange(
     }
   );
 }
+
+// ─── Documents & Folders (Google Drive Feature) ─────────────────────────────
+
+/** Subscribes to real-time changes on all folders for the teacher. */
+export function onDocFoldersChange(
+  uid: string,
+  callback: (folders: DocFolder[]) => void
+): Unsubscribe {
+  const q = query(collection(db, 'users', uid, 'doc_folders'));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const items: DocFolder[] = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          userId: uid,
+          name: data.name ?? 'Untitled Folder',
+          parentId: data.parentId ?? null,
+          color: data.color ?? '#3B82F6',
+          path: Array.isArray(data.path) ? data.path : [],
+          createdAt: toDate(data.createdAt),
+          updatedAt: toDate(data.updatedAt),
+        };
+      });
+
+      // Sort alphabetically by name
+      items.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+      callback(items);
+    },
+    (err) => {
+      console.error('Error in onDocFoldersChange listener:', err);
+    }
+  );
+}
+
+/** Creates a new folder in doc_folders. */
+export async function createDocFolder(
+  uid: string,
+  data: {
+    name: string;
+    parentId: string | null;
+    color?: string;
+    path?: string[];
+  }
+): Promise<string> {
+  const ref = await addDoc(collection(db, 'users', uid, 'doc_folders'), {
+    name: data.name.trim() || 'New Folder',
+    parentId: data.parentId ?? null,
+    color: data.color ?? '#3B82F6',
+    path: Array.isArray(data.path) ? data.path : [],
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+/** Renames an existing folder. */
+export async function renameDocFolder(
+  uid: string,
+  folderId: string,
+  name: string
+): Promise<void> {
+  await updateDoc(doc(db, 'users', uid, 'doc_folders', folderId), {
+    name: name.trim(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Updates an existing folder's accent color. */
+export async function updateDocFolderColor(
+  uid: string,
+  folderId: string,
+  color: string
+): Promise<void> {
+  await updateDoc(doc(db, 'users', uid, 'doc_folders', folderId), {
+    color,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Moves a folder to a new parent folder, updating its path and child subfolders' paths. */
+export async function moveDocFolder(
+  uid: string,
+  folderId: string,
+  newParentId: string | null,
+  newPath: string[],
+  allFolders: DocFolder[]
+): Promise<void> {
+  const batch = writeBatch(db);
+  const targetFolder = doc(db, 'users', uid, 'doc_folders', folderId);
+  batch.update(targetFolder, {
+    parentId: newParentId,
+    path: newPath,
+    updatedAt: serverTimestamp(),
+  });
+
+  // Find any subfolders that have folderId in their path and update their paths
+  const newPathPrefix = [...newPath, folderId];
+
+  for (const f of allFolders) {
+    if (f.path && f.path.includes(folderId)) {
+      const idx = f.path.indexOf(folderId);
+      const suffix = f.path.slice(idx + 1);
+      const updatedPath = [...newPathPrefix, ...suffix];
+      batch.update(doc(db, 'users', uid, 'doc_folders', f.id), {
+        path: updatedPath,
+        updatedAt: serverTimestamp(),
+      });
+    }
+  }
+
+  await batch.commit();
+}
+
+/**
+ * Cascading folder deletion:
+ * Deletes the specified folder, all nested child folders, and all files in these folders.
+ * Also deletes file binaries from Firebase Storage to free up quota.
+ */
+export async function deleteDocFolderCascade(
+  uid: string,
+  folderId: string,
+  allFolders: DocFolder[],
+  allFiles: DocFile[]
+): Promise<void> {
+  // Collect all folder IDs that need to be deleted (this folder + descendants)
+  const folderIdsToDelete = new Set<string>([folderId]);
+  let addedNew = true;
+  while (addedNew) {
+    addedNew = false;
+    for (const f of allFolders) {
+      if (!folderIdsToDelete.has(f.id)) {
+        if (
+          (f.parentId && folderIdsToDelete.has(f.parentId)) ||
+          f.path.some((pId) => folderIdsToDelete.has(pId))
+        ) {
+          folderIdsToDelete.add(f.id);
+          addedNew = true;
+        }
+      }
+    }
+  }
+
+  // Find all files belonging to any of these folders
+  const filesToDelete = allFiles.filter(
+    (file) => file.folderId && folderIdsToDelete.has(file.folderId)
+  );
+
+  // 1. Delete storage blobs in parallel
+  await Promise.allSettled(
+    filesToDelete.map((file) => deleteDocumentFile(file.storagePath))
+  );
+
+  // 2. Clean up any chunk subcollections for chunked files
+  for (const file of filesToDelete) {
+    if (file.chunkCount && file.chunkCount > 0) {
+      try {
+        const chunksRef = collection(db, 'users', uid, 'doc_files', file.id, 'chunks');
+        const snap = await getDocs(chunksRef);
+        if (!snap.empty) {
+          const chunkBatch = writeBatch(db);
+          snap.docs.forEach((d) => chunkBatch.delete(d.ref));
+          await chunkBatch.commit();
+        }
+      } catch (err) {
+        console.warn('Failed to delete chunks in cascade:', err);
+      }
+    }
+  }
+
+  // 3. Batch delete file documents and folder documents in Firestore
+  const batch = writeBatch(db);
+  for (const file of filesToDelete) {
+    batch.delete(doc(db, 'users', uid, 'doc_files', file.id));
+  }
+  for (const fId of folderIdsToDelete) {
+    batch.delete(doc(db, 'users', uid, 'doc_folders', fId));
+  }
+
+  await batch.commit();
+}
+
+/** Subscribes to real-time changes on all files for the teacher. */
+export function onDocFilesChange(
+  uid: string,
+  callback: (files: DocFile[]) => void
+): Unsubscribe {
+  const q = query(collection(db, 'users', uid, 'doc_files'));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const items: DocFile[] = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          userId: uid,
+          name: data.name ?? 'Untitled File',
+          folderId: data.folderId ?? null,
+          storagePath: data.storagePath ?? '',
+          downloadUrl: data.downloadUrl ?? '',
+          size: data.size ?? 0,
+          mimeType: data.mimeType ?? 'application/octet-stream',
+          fileExtension: data.fileExtension ?? '',
+          storageType: data.storageType ?? (data.storagePath ? 'storage' : 'firestore'),
+          dataUrl: data.dataUrl,
+          chunkCount: data.chunkCount ?? 0,
+          createdAt: toDate(data.createdAt),
+          updatedAt: toDate(data.updatedAt),
+        };
+      });
+
+      // Sort newest first by default
+      items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      callback(items);
+    },
+    (err) => {
+      console.error('Error in onDocFilesChange listener:', err);
+    }
+  );
+}
+
+/** Creates a new file metadata record in doc_files. */
+export async function createDocFileRecord(
+  uid: string,
+  data: {
+    name: string;
+    folderId: string | null;
+    storagePath: string;
+    downloadUrl: string;
+    size: number;
+    mimeType: string;
+    fileExtension: string;
+    storageType?: 'storage' | 'firestore';
+    dataUrl?: string;
+    chunkCount?: number;
+  }
+): Promise<string> {
+  const payload: Record<string, unknown> = {
+    name: data.name,
+    folderId: data.folderId ?? null,
+    storagePath: data.storagePath || '',
+    downloadUrl: data.downloadUrl || '',
+    size: data.size,
+    mimeType: data.mimeType,
+    fileExtension: data.fileExtension,
+    storageType: data.storageType ?? 'firestore',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  if (data.dataUrl) {
+    payload.dataUrl = data.dataUrl;
+  }
+  if (typeof data.chunkCount === 'number') {
+    payload.chunkCount = data.chunkCount;
+  }
+
+  const ref = await addDoc(collection(db, 'users', uid, 'doc_files'), payload);
+  return ref.id;
+}
+
+/** Saves file payload chunks to users/{uid}/doc_files/{fileId}/chunks */
+export async function saveDocFileChunks(
+  uid: string,
+  fileId: string,
+  chunks: string[],
+  onProgress?: (progressPercent: number) => void
+): Promise<void> {
+  const batchSize = 10;
+  for (let i = 0; i < chunks.length; i += batchSize) {
+    const batch = writeBatch(db);
+    const slice = chunks.slice(i, i + batchSize);
+    slice.forEach((chunkStr, sliceIdx) => {
+      const chunkIndex = i + sliceIdx;
+      const chunkRef = doc(db, 'users', uid, 'doc_files', fileId, 'chunks', `chunk_${chunkIndex}`);
+      batch.set(chunkRef, {
+        index: chunkIndex,
+        chunk: chunkStr,
+      });
+    });
+    await batch.commit();
+    if (onProgress) {
+      const pct = Math.round(((i + slice.length) / chunks.length) * 100);
+      onProgress(pct);
+    }
+  }
+}
+
+/** Retrieves the full payload (Data URL) for a DocFile, assembling chunks if needed */
+export async function getDocFilePayload(uid: string, file: DocFile): Promise<string> {
+  // 1. If stored in Firebase Storage with a valid URL, return it
+  if (file.storageType === 'storage' && file.downloadUrl && file.downloadUrl.startsWith('http')) {
+    return file.downloadUrl;
+  }
+
+  // 2. If it has direct dataUrl, return it
+  if (file.dataUrl) {
+    return file.dataUrl;
+  }
+
+  // 3. If chunked, fetch all chunks from Firestore and assemble
+  if (file.chunkCount && file.chunkCount > 0) {
+    const chunksRef = collection(db, 'users', uid, 'doc_files', file.id, 'chunks');
+    const snap = await getDocs(chunksRef);
+    const chunkDocs = snap.docs.map((d) => d.data() as { index: number; chunk: string });
+    chunkDocs.sort((a, b) => a.index - b.index);
+    return chunkDocs.map((c) => c.chunk).join('');
+  }
+
+  // Fallback to downloadUrl
+  return file.downloadUrl || '';
+}
+
+/** Renames a file record. */
+export async function renameDocFile(
+  uid: string,
+  fileId: string,
+  name: string
+): Promise<void> {
+  const trimmed = name.trim();
+  const extParts = trimmed.split('.');
+  const fileExtension = extParts.length > 1 ? extParts.pop()?.toLowerCase() || '' : '';
+  const updates: Record<string, unknown> = {
+    name: trimmed,
+    updatedAt: serverTimestamp(),
+  };
+  if (fileExtension) {
+    updates.fileExtension = fileExtension;
+  }
+  await updateDoc(doc(db, 'users', uid, 'doc_files', fileId), updates);
+}
+
+/** Moves a file to another folder or root. */
+export async function moveDocFile(
+  uid: string,
+  fileId: string,
+  newFolderId: string | null
+): Promise<void> {
+  await updateDoc(doc(db, 'users', uid, 'doc_files', fileId), {
+    folderId: newFolderId ?? null,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Deletes a single file record, removing chunks and Firebase Storage blob if present. */
+export async function deleteDocFileRecord(
+  uid: string,
+  fileId: string,
+  storagePath: string
+): Promise<void> {
+  // 1. Delete storage blob if exists
+  if (storagePath) {
+    await deleteDocumentFile(storagePath);
+  }
+
+  // 2. Delete chunks if any exist
+  try {
+    const chunksRef = collection(db, 'users', uid, 'doc_files', fileId, 'chunks');
+    const snap = await getDocs(chunksRef);
+    if (!snap.empty) {
+      const batch = writeBatch(db);
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+  } catch (err) {
+    console.warn('Failed to clean up file chunks:', err);
+  }
+
+  // 3. Delete firestore metadata document
+  await deleteDoc(doc(db, 'users', uid, 'doc_files', fileId));
+}
+
 
 
 

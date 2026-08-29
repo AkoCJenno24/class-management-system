@@ -32,6 +32,12 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select';
 import { toast } from 'sonner';
 import {
   Plus,
@@ -47,6 +53,8 @@ import {
   Calendar,
   Filter,
   MoreVertical,
+  ArrowUpDown,
+  X,
 } from 'lucide-react';
 import type { Student, Class } from '@/types';
 import { STUDENT_STATUS_OPTIONS } from '@/types';
@@ -57,6 +65,8 @@ export function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [search, setSearch] = useState('');
+  const [studentSort, setStudentSort] = useState<'firstName-asc' | 'firstName-desc' | 'lastName-asc' | 'lastName-desc'>('firstName-asc');
+  const [studentGenderFilter, setStudentGenderFilter] = useState<'all' | 'male' | 'female'>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -107,23 +117,48 @@ export function StudentsPage() {
       return currentStatus === statusFilter;
     })
     .filter((s) => {
+      if (studentGenderFilter !== 'all') {
+        const g = (s.gender || '').toLowerCase().trim();
+        if (g !== studentGenderFilter) return false;
+      }
+      return true;
+    })
+    .filter((s) => {
       const term = search.toLowerCase().trim();
       if (!term) return true;
+
+      const firstName = (s.firstName || '').toLowerCase();
+      const middleName = (s.middleName || '').toLowerCase();
+      const lastName = (s.lastName || '').toLowerCase();
       const fullName = formatStudentFullName(s).toLowerCase();
+      const firstLast = `${firstName} ${lastName}`.trim();
+      const lastFirst = `${lastName} ${firstName}`.trim();
+
       return (
+        firstName.includes(term) ||
+        middleName.includes(term) ||
+        lastName.includes(term) ||
         fullName.includes(term) ||
-        s.firstName.toLowerCase().includes(term) ||
-        (s.middleName && s.middleName.toLowerCase().includes(term)) ||
-        s.lastName.toLowerCase().includes(term) ||
-        (s.studentId && s.studentId.toLowerCase().includes(term)) ||
-        (s.gradeLevel && s.gradeLevel.toLowerCase().includes(term)) ||
-        (s.email && s.email.toLowerCase().includes(term)) ||
-        (s.phone && s.phone.toLowerCase().includes(term)) ||
-        (s.parentGuardian && s.parentGuardian.toLowerCase().includes(term)) ||
-        (s.address && s.address.toLowerCase().includes(term)) ||
-        (s.status && s.status.toLowerCase().includes(term))
+        firstLast.includes(term) ||
+        lastFirst.includes(term)
       );
     });
+
+  // Sort filtered students by First Name or Last Name
+  const sortedStudents = [...filteredStudents].sort((a, b) => {
+    switch (studentSort) {
+      case 'firstName-asc':
+        return (a.firstName || '').localeCompare(b.firstName || '', undefined, { sensitivity: 'base' });
+      case 'firstName-desc':
+        return (b.firstName || '').localeCompare(a.firstName || '', undefined, { sensitivity: 'base' });
+      case 'lastName-asc':
+        return (a.lastName || '').localeCompare(b.lastName || '', undefined, { sensitivity: 'base' });
+      case 'lastName-desc':
+        return (b.lastName || '').localeCompare(a.lastName || '', undefined, { sensitivity: 'base' });
+      default:
+        return 0;
+    }
+  });
 
   const handleConfirmDeleteStudent = () => {
     if (!user || !studentToDelete) return;
@@ -205,16 +240,90 @@ export function StudentsPage() {
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      {/* Search & Sort / Filter Controls */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <Input
-            placeholder="Search students by name, ID, grade, email, parent..."
+            placeholder="Search students by name (first, middle, last)..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 shadow-2xs text-xs sm:text-sm h-9"
+            className="pl-9 pr-8 shadow-2xs text-xs sm:text-sm h-9"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer p-0.5 rounded-full hover:bg-muted"
+              title="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+              <span className="sr-only">Clear search</span>
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Sort Option */}
+          <Select
+            value={studentSort}
+            onValueChange={(val) =>
+              setStudentSort(val as 'firstName-asc' | 'firstName-desc' | 'lastName-asc' | 'lastName-desc')
+            }
+          >
+            <SelectTrigger className="h-9 w-full sm:w-auto px-3 text-xs sm:text-sm bg-card shadow-2xs gap-1.5 cursor-pointer">
+              <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="font-medium">Sort</span>
+            </SelectTrigger>
+            <SelectContent align="end" alignItemWithTrigger={false} className="w-56 min-w-[220px] p-1.5 shadow-lg">
+              <SelectItem value="firstName-asc" className="cursor-pointer text-xs sm:text-sm py-2 pr-8 pl-2.5">
+                First Name (Ascending)
+              </SelectItem>
+              <SelectItem value="firstName-desc" className="cursor-pointer text-xs sm:text-sm py-2 pr-8 pl-2.5">
+                First Name (Descending)
+              </SelectItem>
+              <SelectItem value="lastName-asc" className="cursor-pointer text-xs sm:text-sm py-2 pr-8 pl-2.5">
+                Last Name (Ascending)
+              </SelectItem>
+              <SelectItem value="lastName-desc" className="cursor-pointer text-xs sm:text-sm py-2 pr-8 pl-2.5">
+                Last Name (Descending)
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Filter Option */}
+          <Select
+            value={studentGenderFilter}
+            onValueChange={(val) =>
+              setStudentGenderFilter(val as 'all' | 'male' | 'female')
+            }
+          >
+            <SelectTrigger
+              className={`h-9 w-full sm:w-auto px-3 text-xs sm:text-sm bg-card shadow-2xs gap-1.5 cursor-pointer ${
+                studentGenderFilter !== 'all' ? 'border-primary/50 text-primary bg-primary/5' : ''
+              }`}
+            >
+              <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="font-medium">
+                {studentGenderFilter === 'all'
+                  ? 'Filter'
+                  : studentGenderFilter === 'male'
+                  ? 'Filter: Male'
+                  : 'Filter: Female'}
+              </span>
+            </SelectTrigger>
+            <SelectContent align="end" alignItemWithTrigger={false} className="w-48 min-w-[180px] p-1.5 shadow-lg">
+              <SelectItem value="all" className="cursor-pointer text-xs sm:text-sm py-2 pr-8 pl-2.5">
+                All Genders
+              </SelectItem>
+              <SelectItem value="male" className="cursor-pointer text-xs sm:text-sm py-2 pr-8 pl-2.5">
+                Male
+              </SelectItem>
+              <SelectItem value="female" className="cursor-pointer text-xs sm:text-sm py-2 pr-8 pl-2.5">
+                Female
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -262,33 +371,34 @@ export function StudentsPage() {
       </div>
 
       {/* Roster display */}
-      {filteredStudents.length === 0 ? (
+      {sortedStudents.length === 0 ? (
         <Card className="border-dashed shadow-xs">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 mb-4 text-primary">
               <Users className="h-7 w-7" />
             </div>
             <h3 className="text-lg font-semibold">
-              {search || statusFilter !== 'all' ? 'No students match your filter' : 'No students in roster yet'}
+              {search || statusFilter !== 'all' || studentGenderFilter !== 'all' ? 'No students match your filter' : 'No students in roster yet'}
             </h3>
             <p className="text-sm text-muted-foreground max-w-sm mt-1 mb-4">
-              {search || statusFilter !== 'all'
-                ? 'Try resetting your status filter or searching with different keywords.'
+              {search || statusFilter !== 'all' || studentGenderFilter !== 'all'
+                ? 'Try resetting your status or gender filter, or searching with different keywords.'
                 : 'Build your global student roster. You can record personal info, contact details, and enroll them into classes.'}
             </p>
-            {!search && statusFilter === 'all' && (
+            {!search && statusFilter === 'all' && studentGenderFilter === 'all' && (
               <Button onClick={() => setIsCreateOpen(true)} className="cursor-pointer">
                 <Plus className="mr-2 h-4 w-4" />
                 Add First Student
               </Button>
             )}
-            {(search || statusFilter !== 'all') && (
+            {(search || statusFilter !== 'all' || studentGenderFilter !== 'all') && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
                   setSearch('');
                   setStatusFilter('all');
+                  setStudentGenderFilter('all');
                 }}
               >
                 Reset Filters
@@ -300,7 +410,7 @@ export function StudentsPage() {
         <>
           {/* Mobile Card View (shown on screen < md) */}
           <div className="grid grid-cols-1 gap-3 md:hidden">
-            {filteredStudents.map((student) => {
+            {sortedStudents.map((student) => {
               const fullName = formatStudentFullName(student);
               return (
                 <Card key={student.id} className="p-4 border-border shadow-xs space-y-3">
@@ -415,7 +525,7 @@ export function StudentsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredStudents.map((student) => {
+                  {sortedStudents.map((student) => {
                     const fullName = formatStudentFullName(student);
                     const hasContactInfo = student.email || student.phone || student.parentGuardian;
 

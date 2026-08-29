@@ -1,5 +1,5 @@
 /**
- * Vite configuration for the Class Management System.
+ * Vite configuration for ClassBun.
  * Includes React plugin, Tailwind CSS v4 plugin, and path alias resolution.
  */
 import react from '@vitejs/plugin-react'

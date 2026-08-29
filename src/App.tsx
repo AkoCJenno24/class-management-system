@@ -17,6 +17,7 @@ import { ClassesPage } from '@/pages/ClassesPage';
 import { ClassDetailPage } from '@/pages/ClassDetailPage';
 import { StudentClassDashboardPage } from '@/pages/StudentClassDashboardPage';
 import { StudentsPage } from '@/pages/StudentsPage';
+import { DocumentsPage } from '@/pages/DocumentsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from 'sonner';
@@ -50,6 +51,7 @@ export default function App() {
                       element={<StudentClassDashboardPage />}
                     />
                     <Route path="/students" element={<StudentsPage />} />
+                    <Route path="/documents" element={<DocumentsPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                   </Route>
                 </Route>

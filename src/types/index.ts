@@ -1,5 +1,5 @@
 /**
- * Core TypeScript interfaces for the Class Management System.
+ * Core TypeScript interfaces for ClassBun.
  * All data models used across the application are defined here.
  */
 
@@ -11,6 +11,7 @@ export interface TeacherProfile {
   lastName: string;
   school: string;
   subject: string;
+  schoolLogoUrl?: string | null;
   avatarUrl: string | null;
   avatarPreset: string | null;
   avatarColor: string;
@@ -62,18 +63,18 @@ export const GRADING_SCALE_PRESETS: Record<string, GradingScale> = {
     defaultMaxScore: 100,
     customLabels: [
       { label: 'A+', minPercentage: 97, maxPercentage: 100, color: '#22C55E' },
-      { label: 'A',  minPercentage: 93, maxPercentage: 96,  color: '#22C55E' },
-      { label: 'A-', minPercentage: 90, maxPercentage: 92,  color: '#22C55E' },
-      { label: 'B+', minPercentage: 87, maxPercentage: 89,  color: '#3B82F6' },
-      { label: 'B',  minPercentage: 83, maxPercentage: 86,  color: '#3B82F6' },
-      { label: 'B-', minPercentage: 80, maxPercentage: 82,  color: '#3B82F6' },
-      { label: 'C+', minPercentage: 77, maxPercentage: 79,  color: '#EAB308' },
-      { label: 'C',  minPercentage: 73, maxPercentage: 76,  color: '#EAB308' },
-      { label: 'C-', minPercentage: 70, maxPercentage: 72,  color: '#EAB308' },
-      { label: 'D+', minPercentage: 67, maxPercentage: 69,  color: '#F97316' },
-      { label: 'D',  minPercentage: 63, maxPercentage: 66,  color: '#F97316' },
-      { label: 'D-', minPercentage: 60, maxPercentage: 62,  color: '#F97316' },
-      { label: 'F',  minPercentage: 0,  maxPercentage: 59,  color: '#EF4444' },
+      { label: 'A', minPercentage: 93, maxPercentage: 96, color: '#22C55E' },
+      { label: 'A-', minPercentage: 90, maxPercentage: 92, color: '#22C55E' },
+      { label: 'B+', minPercentage: 87, maxPercentage: 89, color: '#3B82F6' },
+      { label: 'B', minPercentage: 83, maxPercentage: 86, color: '#3B82F6' },
+      { label: 'B-', minPercentage: 80, maxPercentage: 82, color: '#3B82F6' },
+      { label: 'C+', minPercentage: 77, maxPercentage: 79, color: '#EAB308' },
+      { label: 'C', minPercentage: 73, maxPercentage: 76, color: '#EAB308' },
+      { label: 'C-', minPercentage: 70, maxPercentage: 72, color: '#EAB308' },
+      { label: 'D+', minPercentage: 67, maxPercentage: 69, color: '#F97316' },
+      { label: 'D', minPercentage: 63, maxPercentage: 66, color: '#F97316' },
+      { label: 'D-', minPercentage: 60, maxPercentage: 62, color: '#F97316' },
+      { label: 'F', minPercentage: 0, maxPercentage: 59, color: '#EF4444' },
     ],
   },
   letterUK: {
@@ -81,12 +82,12 @@ export const GRADING_SCALE_PRESETS: Record<string, GradingScale> = {
     defaultMaxScore: 100,
     customLabels: [
       { label: 'A*', minPercentage: 90, maxPercentage: 100, color: '#22C55E' },
-      { label: 'A',  minPercentage: 80, maxPercentage: 89,  color: '#22C55E' },
-      { label: 'B',  minPercentage: 70, maxPercentage: 79,  color: '#3B82F6' },
-      { label: 'C',  minPercentage: 60, maxPercentage: 69,  color: '#EAB308' },
-      { label: 'D',  minPercentage: 50, maxPercentage: 59,  color: '#F97316' },
-      { label: 'E',  minPercentage: 40, maxPercentage: 49,  color: '#EF4444' },
-      { label: 'F',  minPercentage: 0,  maxPercentage: 39,  color: '#EF4444' },
+      { label: 'A', minPercentage: 80, maxPercentage: 89, color: '#22C55E' },
+      { label: 'B', minPercentage: 70, maxPercentage: 79, color: '#3B82F6' },
+      { label: 'C', minPercentage: 60, maxPercentage: 69, color: '#EAB308' },
+      { label: 'D', minPercentage: 50, maxPercentage: 59, color: '#F97316' },
+      { label: 'E', minPercentage: 40, maxPercentage: 49, color: '#EF4444' },
+      { label: 'F', minPercentage: 0, maxPercentage: 39, color: '#EF4444' },
     ],
   },
 };
@@ -398,4 +399,48 @@ export interface AppNotification {
   entityId?: string;
   metadata?: Record<string, unknown>;
 }
+
+// ─── Documents & Folders (Google Drive Feature) ─────────────────────────────
+
+/** Color options for Google Drive style folders */
+export const FOLDER_COLOR_PRESETS = [
+  { label: 'Blue', value: '#3B82F6', bgLight: 'bg-blue-500/10', textLight: 'text-blue-600 dark:text-blue-400', border: 'border-blue-500/30' },
+  { label: 'Emerald', value: '#10B981', bgLight: 'bg-emerald-500/10', textLight: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-500/30' },
+  { label: 'Amber', value: '#F59E0B', bgLight: 'bg-amber-500/10', textLight: 'text-amber-600 dark:text-amber-400', border: 'border-amber-500/30' },
+  { label: 'Purple', value: '#8B5CF6', bgLight: 'bg-purple-500/10', textLight: 'text-purple-600 dark:text-purple-400', border: 'border-purple-500/30' },
+  { label: 'Rose', value: '#F43F5E', bgLight: 'bg-rose-500/10', textLight: 'text-rose-600 dark:text-rose-400', border: 'border-rose-500/30' },
+  { label: 'Indigo', value: '#6366F1', bgLight: 'bg-indigo-500/10', textLight: 'text-indigo-600 dark:text-indigo-400', border: 'border-indigo-500/30' },
+  { label: 'Slate', value: '#64748B', bgLight: 'bg-slate-500/10', textLight: 'text-slate-600 dark:text-slate-400', border: 'border-slate-500/30' },
+] as const;
+
+/** Folder entity in teacher documents */
+export interface DocFolder {
+  id: string;
+  userId: string;
+  name: string;
+  parentId: string | null;
+  color?: string;
+  path: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** File/Document entity uploaded by teacher */
+export interface DocFile {
+  id: string;
+  userId: string;
+  name: string;
+  folderId: string | null;
+  storagePath: string;
+  downloadUrl: string;
+  size: number; // in bytes
+  mimeType: string;
+  fileExtension: string;
+  storageType?: 'storage' | 'firestore';
+  dataUrl?: string;
+  chunkCount?: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 

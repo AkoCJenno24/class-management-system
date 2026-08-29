@@ -16,7 +16,8 @@ import { Button } from '@/components/ui/button';
 import { StickyNotesBoard } from '@/components/dashboard/StickyNotesBoard';
 import { TodoListBoard } from '@/components/dashboard/TodoListBoard';
 import type { Class, Student, StickyNote, TodoItem } from '@/types';
-import { BookOpen, Users, Plus, GraduationCap, School } from 'lucide-react';
+import { BookOpen, Users, Plus, School } from 'lucide-react';
+import { ClassBunLogoIcon } from '@/components/ui/ClassBunLogo';
 
 export function DashboardPage() {
   const { user, teacherProfile } = useAuth();
@@ -48,8 +49,10 @@ export function DashboardPage() {
   const activeCount = activeClasses.length;
   const archivedCount = archivedClasses.length;
 
+  const hasComponentsBelow = activeCount === 0 && totalStudents === 0;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 flex flex-col flex-1 min-h-0">
       {/* Welcome banner */}
       <Card className="border-border bg-card shadow-xs overflow-hidden">
         <CardContent className="p-4 sm:p-6">
@@ -140,14 +143,18 @@ export function DashboardPage() {
       </div>
 
       {/* ─── Productivity Hub: Sticky Notes (70% Left) & To-Do List (30% Right) ─── */}
-      <div className="grid grid-cols-1 lg:grid-cols-10 gap-6 items-start">
+      <div
+        className={`grid grid-cols-1 lg:grid-cols-10 gap-6 items-stretch ${
+          hasComponentsBelow ? '' : 'flex-1 min-h-0'
+        }`}
+      >
         {/* Left: Sticky Notes (70% on lg screens) */}
-        <div className="lg:col-span-7 space-y-4">
+        <div className="lg:col-span-7 rounded-2xl border border-border bg-card/40 p-4 sm:p-5 shadow-xs flex flex-col h-full">
           <StickyNotesBoard notes={stickyNotes} />
         </div>
 
         {/* Right: To-Do List (30% on lg screens) */}
-        <div className="lg:col-span-3 space-y-4">
+        <div className="lg:col-span-3 rounded-2xl border border-border bg-card/40 p-4 sm:p-5 shadow-xs flex flex-col h-full">
           <TodoListBoard todos={todos} />
         </div>
       </div>
@@ -156,10 +163,10 @@ export function DashboardPage() {
       {activeCount === 0 && totalStudents === 0 && (
         <Card className="border-dashed shadow-xs">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 mb-4 text-primary">
-              <GraduationCap className="h-7 w-7" />
+            <div className="mb-4">
+              <ClassBunLogoIcon size={56} />
             </div>
-            <h3 className="text-lg font-semibold">Get started with ClassHub</h3>
+            <h3 className="text-lg font-semibold">Get started with ClassBun</h3>
             <p className="text-sm text-muted-foreground text-center max-w-sm mt-1 mb-4">
               Create your first class workspace and enroll students to begin managing daily attendance and grades.
             </p>

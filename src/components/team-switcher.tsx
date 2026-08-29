@@ -14,14 +14,16 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { GraduationCap, School, BookOpen, ChevronsUpDown, Check } from "lucide-react"
+import { BookOpen, ChevronsUpDown, Check } from "lucide-react"
+import { IconSchool } from "@tabler/icons-react"
 
 export function TeamSwitcher() {
   const { teacherProfile } = useAuth()
   const { isMobile } = useSidebar()
 
-  const schoolName = teacherProfile?.school || "ClassHub Academy"
+  const schoolName = teacherProfile?.school || "ClassBun Academy"
   const subjectName = teacherProfile?.subject || "Teacher Workspace"
+  const schoolLogoUrl = teacherProfile?.schoolLogoUrl
 
   return (
     <SidebarMenu>
@@ -35,8 +37,20 @@ export function TeamSwitcher() {
               />
             }
           >
-            <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-xs">
-              <GraduationCap className="size-4.5" />
+            <div className="flex items-center justify-center shrink-0 size-9 sm:size-10 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:mx-auto transition-all">
+              {schoolLogoUrl ? (
+                <img
+                  src={schoolLogoUrl}
+                  alt={schoolName}
+                  className="size-8 sm:size-9 group-data-[collapsible=icon]:size-6.5 object-contain rounded-md transition-all"
+                />
+              ) : (
+                <IconSchool
+                  size={32}
+                  stroke={2}
+                  className="!size-8 sm:!size-9 group-data-[collapsible=icon]:!size-6 text-foreground transition-all shrink-0"
+                />
+              )}
             </div>
             <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
               <span className="truncate font-semibold">{schoolName}</span>
@@ -55,8 +69,16 @@ export function TeamSwitcher() {
                 Current Workspace
               </DropdownMenuLabel>
               <DropdownMenuItem className="gap-2.5 p-2 font-medium">
-                <div className="flex size-7 items-center justify-center rounded-md border bg-primary/10 text-primary">
-                  <School className="size-4" />
+                <div className="flex size-7 items-center justify-center shrink-0">
+                  {schoolLogoUrl ? (
+                    <img
+                      src={schoolLogoUrl}
+                      alt={schoolName}
+                      className="size-6 object-contain rounded-md"
+                    />
+                  ) : (
+                    <IconSchool size={24} stroke={2} className="!size-5.5 text-foreground shrink-0" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="truncate text-sm font-semibold">{schoolName}</p>

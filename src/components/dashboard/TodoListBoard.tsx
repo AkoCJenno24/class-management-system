@@ -514,7 +514,7 @@ export function TodoListBoard({ todos }: TodoListBoardProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 flex flex-col flex-1 min-h-0">
       {/* ─── Header ─── */}
       <div className="space-y-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -716,8 +716,8 @@ export function TodoListBoard({ todos }: TodoListBoardProps) {
       )}
 
       {filteredTodos.length === 0 ? (
-        <Card className="border-dashed shadow-xs bg-card/40">
-          <CardContent className="flex flex-col items-center justify-center py-10 text-center p-6">
+        <Card className="border-dashed shadow-xs bg-card/40 flex-1 flex flex-col items-center justify-center min-h-[180px]">
+          <CardContent className="flex flex-col items-center justify-center py-10 text-center p-6 my-auto">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-3">
               <CheckCircle2 className="h-6 w-6" />
             </div>
@@ -736,7 +736,7 @@ export function TodoListBoard({ todos }: TodoListBoardProps) {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2 flex-1">
           {filteredTodos.map((todo) => {
             const priorityConf = PRIORITY_CONFIG[todo.priority] || PRIORITY_CONFIG.medium;
             const categoryConf = CATEGORY_CONFIG[todo.category] || CATEGORY_CONFIG.general;
